@@ -126,12 +126,12 @@ Abaixo estão listados os componentes do sistema, suas responsabilidades e as ca
 
 Nesta seção, estão disponíveis as interfaces visuais do VetCare, desenvolvidas para validar a usabilidade e a experiência do usuário antes da implementação final. O protótipo navegável pode ser acessado através do link abaixo.
 
-**[Link para o Protótipo Navegável (Figma)](https://link-do-prototipo-aqui.com)**
+**[Link para o Protótipo Navegável (Figma)](https://www.figma.com/design/RyttkdA9VockglJyTNJYqA/Sem-t%25C3%25ADtulo?node-id=1-3&t=sLbbEYodTy7TzK69-0)**
 
 ### Tela de Login
 Interface de autenticação de usuários, contendo campos para e-mail/usuário e senha, além de opção de recuperação de senha.
 *(Substitua a imagem abaixo pelo print da tela de login)*
-![Tela de Login](https://via.placeholder.com/800x450?text=Print+da+Tela+de+Login)
+![Tela de Login]([https://via.placeholder.com/800x450?text=Print+da+Tela+de+Login](https://www.figma.com/design/RyttkdA9VockglJyTNJYqA/Sem-t%C3%ADtulo?node-id=1-2&t=sLbbEYodTy7TzK69-1))
 
 ### Tela de Cadastro de Usuário
 Interface para inclusão de novos usuários no sistema, contendo campos como nome, e-mail, perfil de acesso (Administrador, Recepcionista, Veterinário) e senha.
