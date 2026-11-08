@@ -8,20 +8,6 @@
 
 ---
 
-## Sumário
-
-- [Sobre o Projeto](#-sobre-o-projeto)
-- [Características Arquiteturais](#-características-arquiteturais)
-- [Arquitetura do Sistema](#-arquitetura-do-sistema)
-- [Componentes Candidatos](#-componentes-candidatos)
-- [Protótipo do Sistema](#-protótipo-do-sistema)
-- [Documentação e Artefatos Externos](#-documentação-e-artefatos-externos)
-- [Tecnologias Sugeridas](#-tecnologias-sugeridas)
-- [Equipe](#-equipe)
-- [Licença](#-licença)
-
----
-
 ## Sobre o Projeto
 
 Este repositório contém a **documentação arquitetural** e os artefatos de modelagem do **VetCare**, um sistema de software desenvolvido como parte da disciplina de **Engenharia de Software** da **Universidade Federal da Bahia (UFBA)**. 
@@ -122,64 +108,7 @@ Abaixo estão listados os componentes do sistema, suas responsabilidades e as ca
 
 ---
 
-## Protótipo do Sistema
-
-Nesta seção, estão disponíveis as interfaces visuais do VetCare, desenvolvidas para validar a usabilidade e a experiência do usuário antes da implementação final. O protótipo navegável pode ser acessado através do link abaixo.
-
-**[Link para o Protótipo Navegável (Figma)](https://link-do-prototipo-aqui.com)**
-
-### Tela de Login
-Interface de autenticação de usuários, contendo campos para e-mail/usuário e senha, além de opção de recuperação de senha.
-*(Substitua a imagem abaixo pelo print da tela de login)*
-![Tela de Login](https://via.placeholder.com/800x450?text=Print+da+Tela+de+Login)
-
-### Tela de Cadastro de Usuário
-Interface para inclusão de novos usuários no sistema, contendo campos como nome, e-mail, perfil de acesso (Administrador, Recepcionista, Veterinário) e senha.
-*(Incluir a imagem abaixo pelo print da tela de cadastro)*
-![Tela de Cadastro de Usuário](https://via.placeholder.com/800x450?text=Print+da+Tela+de+Cadastro)
-
-> **Nota:** Outras telas do sistema (Agenda, Prontuário, Financeiro) podem ser adicionadas nesta seção conforme o avanço do projeto.
-
----
-
-## Documentação e Artefatos Externos
-
-Para centralizar e facilitar o acesso a todos os artefatos produzidos durante o desenvolvimento do projeto, os documentos complementares estão organizados na tabela abaixo:
-
-| Artefato | Descrição | Link de Acesso |
-| :--- | :--- | :--- |
-| **Documentação de Requisitos** | Documento completo com os requisitos funcionais e não funcionais do VetCare. | [Acessar Google Docs](https://docs.google.com/document/d/1Q5mlRNlOBcRVlrh8S1Xe0NLVUcPYFrlbgivGcqV6Myo/edit?tab=t.vslsqmnwl6d2) |
-| **Diagrama de Pacotes (UML)** | Diagrama visual da arquitetura de pacotes e dependências do sistema. | [Acessar Diagrama](https://docs.google.com/document/d/1Q5mlRNlOBcRVlrh8S1Xe0NLVUcPYFrlbgivGcqV6Myo/edit?tab=t.ubqouu4r2w0l) |
-| **Diagrama de Classes (UML)** | Modelagem das entidades e relacionamentos do domínio do sistema. | [Acessar Diagrama](https://link-do-diagrama-aqui.com) |
-| **Diagrama de Sequência (UML)** | Representação das interações entre os componentes para fluxos críticos. | [Acessar Diagrama](https://link-do-diagrama-aqui.com) |
-| **Protótipo Navegável** | Link direto para o protótipo interativo no Figma. | [Acessar Protótipo](https://link-do-prototipo-aqui.com) |
-
-> **Instruções:** Colocar os links de exemplo acima pelos URLs reais dos documentos da equipe.
-
----
-
 ## Tecnologias Sugeridas
-
-| Tecnologia | Descrição |
-|-----------|-----------|
-| [React](https://react.dev/) | Biblioteca para construção de interfaces (Frontend) |
-| [Node.js](https://nodejs.org/) | Ambiente de execução para o Backend |
-| [PostgreSQL](https://www.postgresql.org/) | Banco de dados relacional (Confiabilidade e Integridade) |
-| [Redis](https://redis.io/) | Cache em memória para alto desempenho |
-| [RabbitMQ](https://www.rabbitmq.com/) / [Kafka](https://kafka.apache.org/) | Mensageria e processamento assíncrono |
-| [Docker](https://www.docker.com/) | Containerização e padronização de ambientes |
-| [Figma](https://www.figma.com/) | Prototipação de interfaces e design |
-
----
-
-## Equipe
-
-### Grupo de Desenvolvimento
-| Nome | GitHub | Função |
-|------|--------|--------|
-| [Nome 1] | [@usuario1](https://github.com/usuario1) | Arquiteto(a) de Software |
-| [Nome 2] | [@usuario2](https://github.com/usuario2) | Desenvolvedor(a) / Documentador(a) |
-| [Nome 3] | [@usuario3](https://github.com/usuario3) | Desenvolvedor(a) / Documentador(a) |
 
 ### Contexto Acadêmico
 - **Instituição:** Universidade Federal da Bahia (UFBA)
@@ -202,8 +131,3 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 - [Documentação Node.js](https://nodejs.org/)
 - [Documentação PostgreSQL](https://www.postgresql.org/docs/)
 
----
-
-<p align="center">
-  Desenvolvido com 💙 para a disciplina de <strong>Engenharia de Software - UFBA</strong>
-</p>
