@@ -1,6 +1,51 @@
+import { useState, type FormEvent } from "react";
+import { login } from "../lib/api";
+import type { AuthUser } from "../types/auth";
 import "./LoginPage.css";
 
-export default function LoginPage() {
+type LoginPageProps = {
+  onAuthenticated: (user: AuthUser) => void;
+};
+
+export default function LoginPage({ onAuthenticated }: LoginPageProps) {
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (isSubmitting) {
+      return;
+    }
+
+    setError(null);
+
+    if (!identifier.trim() || !password) {
+      setError("Informe e-mail/usuário e senha.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const user = await login({
+        email: identifier.trim(),
+        password,
+      });
+      onAuthenticated(user);
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Não foi possível entrar. Tente novamente.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <div className="login">
       <aside className="login__brand" aria-labelledby="vetcare-title">
@@ -33,8 +78,16 @@ export default function LoginPage() {
 
           <form
             className="login__form"
-            onSubmit={(event) => event.preventDefault()}
+            noValidate
+            aria-busy={isSubmitting}
+            onSubmit={handleSubmit}
           >
+            {error ? (
+              <p className="login__error" role="alert">
+                {error}
+              </p>
+            ) : null}
+
             <div className="field">
               <label className="field__label" htmlFor="login-identifier">
                 E-mail ou usuário
@@ -47,6 +100,8 @@ export default function LoginPage() {
                 placeholder="seu@email.com"
                 autoComplete="username"
                 spellCheck={false}
+                value={identifier}
+                onChange={(event) => setIdentifier(event.target.value)}
               />
             </div>
 
@@ -61,6 +116,8 @@ export default function LoginPage() {
                 type="password"
                 placeholder="Digite sua senha"
                 autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
               />
               <div className="field__action">
                 <a className="forgot-link" href="#recuperar-senha">
@@ -69,8 +126,12 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <button className="submit-button" type="submit">
-              Entrar
+            <button
+              className="submit-button"
+              type="submit"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Entrando..." : "Entrar"}
             </button>
 
             <p className="access-note">

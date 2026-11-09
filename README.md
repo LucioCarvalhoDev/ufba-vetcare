@@ -119,6 +119,40 @@ Abaixo estão listados os componentes do sistema, suas responsabilidades e as ca
 
 ---
 
+## Como executar a implementação
+
+Pré-requisitos: **Node.js >= 24** (necessário para `node:sqlite` sem flags experimentais).
+
+1. Crie o arquivo de ambiente e defina a senha inicial do administrador:
+   ```bash
+   cp .env.example .env
+   # edite ADMIN_PASSWORD no .env
+   ```
+2. Instale as dependências:
+   ```bash
+   npm install
+   ```
+3. Inicie o banco e o servidor de desenvolvimento:
+   ```bash
+   npm run dev
+   ```
+   O Vite exibe a URL do frontend e encaminha `/api` para o servidor em `http://127.0.0.1:3001`.
+
+4. Para a versão de produção:
+   ```bash
+   npm run build
+   npm start
+   ```
+
+O banco SQLite é criado em `data/vetcare.db` e o usuário administrador inicial é `admin@vetcare.com`. O arquivo `.env` e o diretório `data/` são ignorados pelo Git. Para redefinir a senha do administrador, atualize `ADMIN_PASSWORD` e execute `npm run db:seed`.
+
+Testes da API e do RBAC:
+```bash
+npm test
+```
+
+---
+
 ## Licença
 
 Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.

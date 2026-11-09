@@ -310,3 +310,27 @@
     padding-bottom: 24px;
   }
 }
+
+.login__error {
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  border: 1px solid #e7b9b9;
+  border-radius: 8px;
+  background: #fdf3f3;
+  color: #8c2f2f;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.submit-button:disabled {
+  cursor: progress;
+  opacity: 0.82;
+}
+
+.submit-button:disabled:hover {
+  background: var(--vetcare-green-700);
+}
+
+.submit-button:disabled:active {
+  transform: none;
+}
