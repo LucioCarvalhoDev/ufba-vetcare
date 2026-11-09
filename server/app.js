@@ -16,6 +16,7 @@ import { createRecordsRouter } from "./records.js";
 import { createAppointmentsRouter } from "./appointments.js";
 import { createAvailabilityRouter } from "./availability.js";
 import { createScheduleRouter } from "./schedule.js";
+import { createDashboardRouter } from "./dashboard.js";
 
 const MAX_BODY_BYTES = 16 * 1024;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -823,6 +824,13 @@ export function createVetCareServer({
     HttpError,
   });
 
+  const handleDashboard = createDashboardRouter({
+    database,
+    requirePermission,
+    sendJson,
+    HttpError,
+  });
+
   const handleSchedule = createScheduleRouter({
     database,
     requirePermission,
@@ -892,6 +900,10 @@ export function createVetCareServer({
         pathname.startsWith("/api/animals/")
       ) {
         return handleRecords(req, res, pathname);
+      }
+
+      if (pathname === "/api/veterinarian-dashboard") {
+        return handleDashboard(req, res, pathname);
       }
 
       if (pathname === "/api/schedule") {

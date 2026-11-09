@@ -1217,3 +1217,97 @@ test("agenda semanal distingue livre, ocupado e sem atendimento", async () => {
   );
   assert.equal(invalid.status, 400);
 });
+
+test("dashboard do veterinário resume o dia, o mês e a semana", async () => {
+  const vet = await database.createUser({
+    name: "Veterinária do Dashboard",
+    email: "vet.dashboard@vetcare.com",
+    password: "SenhaDashboard123!",
+    roleSlugs: ["veterinario"],
+  });
+
+  assert.ok(vet);
+
+  const tutor = database.createTutor({
+    name: "Tutor do Dashboard",
+    cpf: "123.123.123-12",
+  });
+  const animal = database.createAnimal({
+    tutorId: tutor.id,
+    name: "Pet do Dashboard",
+    species: "Cão",
+    sex: "male",
+  });
+
+  function createAt(hour) {
+    return database.createAppointment({
+      animalId: animal.id,
+      veterinarianId: vet.id,
+      type: "consultation",
+      scheduledAt: new Date(2030, 1, 11, hour, 0).toISOString(),
+      durationMinutes: 30,
+      notes: "Dashboard.",
+    });
+  }
+
+  const completed = createAt(8);
+  createAt(9);
+  const cancelled = createAt(10);
+  createAt(11);
+  database.updateAppointment(completed.id, {
+    animalId: animal.id,
+    veterinarianId: vet.id,
+    type: "consultation",
+    scheduledAt: completed.scheduledAt,
+    durationMinutes: 30,
+    status: "completed",
+  });
+  database.cancelAppointment(cancelled.id);
+  database.createAppointment({
+    animalId: animal.id,
+    veterinarianId: vet.id,
+    type: "consultation",
+    scheduledAt: new Date(2030, 1, 12, 9, 0).toISOString(),
+    durationMinutes: 30,
+    notes: "Dashboard.",
+  });
+
+  const login = await loginRequest(vet.email, "SenhaDashboard123!");
+  const cookie = sessionCookie(login);
+  const response = await fetch(
+    `${baseUrl}/api/veterinarian-dashboard?date=2030-02-11&month=2030-02`,
+    { headers: { cookie } },
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.veterinarian.id, vet.id);
+  assert.deepEqual(body.metrics, {
+    total: 4,
+    completed: 1,
+    pending: 2,
+    cancelled: 1,
+  });
+  assert.equal(body.appointments.length, 4);
+  assert.equal(body.month.key, "2030-02");
+  assert.deepEqual(
+    body.month.days.map((day) => day.date),
+    ["2030-02-11", "2030-02-12"],
+  );
+  assert.equal(body.month.days[0].count, 3);
+  assert.equal(body.week.total, 4);
+
+  const adminLogin = await loginRequest(TEST_EMAIL, TEST_PASSWORD);
+  const adminCookie = sessionCookie(adminLogin);
+  const forbidden = await fetch(
+    `${baseUrl}/api/veterinarian-dashboard?date=2030-02-11&month=2030-02`,
+    { headers: { cookie: adminCookie } },
+  );
+  assert.equal(forbidden.status, 403);
+
+  const invalid = await fetch(
+    `${baseUrl}/api/veterinarian-dashboard?date=2030-02-11&month=2030-13`,
+    { headers: { cookie } },
+  );
+  assert.equal(invalid.status, 400);
+});
