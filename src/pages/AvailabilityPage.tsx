@@ -1,4 +1,10 @@
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import {
   fetchVeterinarianAvailability,
   updateVeterinarianAvailability,
@@ -74,6 +80,32 @@ export default function AvailabilityPage({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [flash, setFlash] = useFlashMessage();
+  const dragRef = useRef<{
+    targetSelected: boolean;
+    seen: Set<string>;
+  } | null>(null);
+  const suppressClickRef = useRef(false);
+
+  useEffect(() => {
+    function endDrag() {
+      if (!dragRef.current) {
+        return;
+      }
+
+      dragRef.current = null;
+      window.setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
+    }
+
+    window.addEventListener("pointerup", endDrag);
+    window.addEventListener("pointercancel", endDrag);
+
+    return () => {
+      window.removeEventListener("pointerup", endDrag);
+      window.removeEventListener("pointercancel", endDrag);
+    };
+  }, []);
 
   useEffect(() => {
     if (!canRead) {
@@ -116,6 +148,24 @@ export default function AvailabilityPage({
     };
   }, [canRead, veterinarianId]);
 
+  function setSlotState(key: string, isSelected: boolean) {
+    setSelected((current) => {
+      if (current.has(key) === isSelected) {
+        return current;
+      }
+
+      const next = new Set(current);
+
+      if (isSelected) {
+        next.add(key);
+      } else {
+        next.delete(key);
+      }
+
+      return next;
+    });
+  }
+
   function toggleSlot(weekday: number, minutes: number) {
     if (!canWrite) {
       return;
@@ -133,6 +183,79 @@ export default function AvailabilityPage({
 
       return next;
     });
+  }
+
+  function getCellKey(cell: HTMLButtonElement) {
+    return slotKey(Number(cell.dataset.weekday), Number(cell.dataset.start));
+  }
+
+  function getCellFromEvent(event: {
+    target: EventTarget | null;
+  }) {
+    return event.target instanceof Element
+      ? event.target.closest<HTMLButtonElement>("button[data-weekday]")
+      : null;
+  }
+
+  function handlePointerDown(event: ReactPointerEvent<HTMLTableElement>) {
+    if (!canWrite || event.pointerType === "touch") {
+      return;
+    }
+
+    const cell = getCellFromEvent(event);
+
+    if (!cell) {
+      return;
+    }
+
+    const key = getCellKey(cell);
+    const targetSelected = !selected.has(key);
+    dragRef.current = {
+      targetSelected,
+      seen: new Set([key]),
+    };
+    suppressClickRef.current = true;
+    setSlotState(key, targetSelected);
+  }
+
+  function handlePointerOver(event: ReactPointerEvent<HTMLTableElement>) {
+    if (!canWrite || event.pointerType === "touch" || !dragRef.current) {
+      return;
+    }
+
+    const cell = getCellFromEvent(event);
+
+    if (!cell) {
+      return;
+    }
+
+    const key = getCellKey(cell);
+
+    if (dragRef.current.seen.has(key)) {
+      return;
+    }
+
+    dragRef.current.seen.add(key);
+    setSlotState(key, dragRef.current.targetSelected);
+  }
+
+  function handleClick(event: ReactMouseEvent<HTMLTableElement>) {
+    if (!canWrite) {
+      return;
+    }
+
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+
+    const cell = getCellFromEvent(event);
+
+    if (!cell) {
+      return;
+    }
+
+    toggleSlot(Number(cell.dataset.weekday), Number(cell.dataset.start));
   }
 
   async function handleSave() {
@@ -259,7 +382,12 @@ export default function AvailabilityPage({
         </header>
 
         <div className="availability-scroll">
-          <table className="availability-table">
+          <table
+            className="availability-table"
+            onPointerDown={handlePointerDown}
+            onPointerOver={handlePointerOver}
+            onClick={handleClick}
+          >
             <thead>
               <tr>
                 <th scope="col">Horário</th>
@@ -288,7 +416,6 @@ export default function AvailabilityPage({
                           data-weekday={day.value}
                           data-start={slot.minutes}
                           disabled={!canWrite}
-                          onClick={() => toggleSlot(day.value, slot.minutes)}
                         >
                           {isSelected ? "✓" : ""}
                         </button>
