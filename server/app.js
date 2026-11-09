@@ -13,6 +13,7 @@ import {
 } from "./security.js";
 import { hasPermission } from "./permissions.js";
 import { createRecordsRouter } from "./records.js";
+import { createAppointmentsRouter } from "./appointments.js";
 
 const MAX_BODY_BYTES = 16 * 1024;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -820,6 +821,17 @@ export function createVetCareServer({
     HttpError,
   });
 
+  const handleAppointments = createAppointmentsRouter({
+    database,
+    requirePermission,
+    isSameOriginRequest,
+    readJsonBody,
+    sendJson,
+    getClientIp,
+    getUserAgent,
+    HttpError,
+  });
+
   async function handleRequest(req, res) {
     setSecurityHeaders(res);
 
@@ -860,6 +872,14 @@ export function createVetCareServer({
         pathname.startsWith("/api/animals/")
       ) {
         return handleRecords(req, res, pathname);
+      }
+
+      if (
+        pathname === "/api/veterinarians" ||
+        pathname === "/api/appointments" ||
+        pathname.startsWith("/api/appointments/")
+      ) {
+        return handleAppointments(req, res, pathname);
       }
 
       const userRoute = pathname.match(/^\/api\/users\/([^/]+)$/);

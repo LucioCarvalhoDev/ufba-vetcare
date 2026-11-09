@@ -17,6 +17,12 @@ import type {
   Tutor,
   TutorInput,
 } from "../types/registry";
+import type {
+  Appointment,
+  AppointmentFilters,
+  AppointmentInput,
+  Veterinarian,
+} from "../types/appointments";
 
 type ApiErrorPayload = {
   error?: {
@@ -271,4 +277,75 @@ export async function updateAnimal(
   );
 
   return response.animal;
+}
+
+export async function fetchAppointments(
+  filters: AppointmentFilters = {},
+): Promise<Appointment[]> {
+  const params = new URLSearchParams();
+
+  if (filters.q) params.set("q", filters.q);
+  if (filters.type) params.set("type", filters.type);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.veterinarianId) {
+    params.set("veterinarianId", filters.veterinarianId);
+  }
+
+  const query = params.toString();
+  const response = await request<{ appointments: Appointment[]; total: number }>(
+    `/appointments${query ? `?${query}` : ""}`,
+    { method: "GET" },
+  );
+
+  return response.appointments;
+}
+
+export async function fetchAppointment(id: string): Promise<Appointment> {
+  const response = await request<{ appointment: Appointment }>(
+    `/appointments/${encodeURIComponent(id)}`,
+    { method: "GET" },
+  );
+
+  return response.appointment;
+}
+
+export async function createAppointment(
+  input: AppointmentInput,
+): Promise<Appointment> {
+  const response = await request<{ appointment: Appointment }>("/appointments", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
+  return response.appointment;
+}
+
+export async function updateAppointment(
+  id: string,
+  input: AppointmentInput,
+): Promise<Appointment> {
+  const response = await request<{ appointment: Appointment }>(
+    `/appointments/${encodeURIComponent(id)}`,
+    { method: "PUT", body: JSON.stringify(input) },
+  );
+
+  return response.appointment;
+}
+
+export async function cancelAppointment(id: string): Promise<Appointment> {
+  const response = await request<{ appointment: Appointment }>(
+    `/appointments/${encodeURIComponent(id)}/cancel`,
+    { method: "POST" },
+  );
+
+  return response.appointment;
+}
+
+export async function fetchVeterinarians(): Promise<Veterinarian[]> {
+  const response = await request<{ veterinarians: Veterinarian[] }>(
+    "/veterinarians",
+    { method: "GET" },
+  );
+
+  return response.veterinarians;
 }

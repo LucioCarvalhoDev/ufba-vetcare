@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import AppShell from "./components/AppShell";
+import AppointmentFormPage from "./pages/AppointmentFormPage";
+import AppointmentsListPage from "./pages/AppointmentsListPage";
 import HomePage from "./pages/HomePage";
 import PetsListPage from "./pages/PetsListPage";
 import PetFormPage from "./pages/PetFormPage";
@@ -67,6 +69,59 @@ export default function App() {
 
   if (!user) {
     return <LoginPage onAuthenticated={setUser} />;
+  }
+
+  if (pathname === "/agenda") {
+    return (
+      <AppShell
+        user={user}
+        title="Agenda"
+        activeNav="agenda"
+        isLoggingOut={isLoggingOut}
+        onLogout={handleLogout}
+      >
+        <AppointmentsListPage user={user} />
+      </AppShell>
+    );
+  }
+
+  if (pathname === "/agenda/novo") {
+    return (
+      <AppShell
+        user={user}
+        title="Novo agendamento"
+        activeNav="agenda"
+        isLoggingOut={isLoggingOut}
+        onLogout={handleLogout}
+      >
+        <AppointmentFormPage key="appointment-create" user={user} mode="create" />
+      </AppShell>
+    );
+  }
+
+  const editAppointmentMatch = pathname.match(
+    /^\/agenda\/([^/]+)\/editar$/,
+  );
+
+  if (editAppointmentMatch) {
+    const appointmentId = editAppointmentMatch[1];
+
+    return (
+      <AppShell
+        user={user}
+        title="Editar agendamento"
+        activeNav="agenda"
+        isLoggingOut={isLoggingOut}
+        onLogout={handleLogout}
+      >
+        <AppointmentFormPage
+          key={`appointment-edit-${appointmentId}`}
+          user={user}
+          mode="edit"
+          appointmentId={appointmentId}
+        />
+      </AppShell>
+    );
   }
 
   if (pathname === "/tutores") {

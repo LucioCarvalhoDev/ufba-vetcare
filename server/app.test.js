@@ -821,3 +821,171 @@ test("API de tutores e animais aplica CRUD, filtros, RBAC e auditoria", async ()
     "tutors.update",
   ]);
 });
+
+test("API de agendamentos cobre CRUD, conflito, cancelamento e auditoria", async () => {
+  const adminLogin = await loginRequest(TEST_EMAIL, TEST_PASSWORD);
+  const adminCookie = sessionCookie(adminLogin);
+
+  const vet = await database.createUser({
+    name: "Veterinária da Agenda",
+    email: "vet.agenda@vetcare.com",
+    password: "SenhaVetAgenda123!",
+    roleSlugs: ["veterinario"],
+  });
+
+  assert.ok(vet);
+
+  const tutor = database.createTutor({
+    name: "Tutor da Agenda",
+    cpf: "555.444.333-22",
+    email: "tutor.agenda@vetcare.com",
+  });
+  const animal = database.createAnimal({
+    tutorId: tutor.id,
+    name: "Pet da Agenda",
+    species: "Cão",
+    breed: "SRD",
+    sex: "male",
+  });
+
+  const veterinarians = await fetch(`${baseUrl}/api/veterinarians`, {
+    headers: { cookie: adminCookie },
+  });
+  const veterinariansBody = await veterinarians.json();
+
+  assert.equal(veterinarians.status, 200);
+  assert.ok(
+    veterinariansBody.veterinarians.some(
+      (item) => item.email === "vet.agenda@vetcare.com",
+    ),
+  );
+
+  const createResponse = await fetch(`${baseUrl}/api/appointments`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: adminCookie,
+    },
+    body: JSON.stringify({
+      animalId: animal.id,
+      veterinarianId: vet.id,
+      type: "consultation",
+      scheduledAt: "2030-01-15T13:00:00.000Z",
+      durationMinutes: 30,
+      notes: "Primeira consulta.",
+    }),
+  });
+  const createBody = await createResponse.json();
+
+  assert.equal(createResponse.status, 201);
+  assert.equal(createBody.appointment.animalId, animal.id);
+  assert.equal(createBody.appointment.tutorName, "Tutor da Agenda");
+  assert.equal(createBody.appointment.veterinarianName, "Veterinária da Agenda");
+  assert.equal(createBody.appointment.status, "scheduled");
+
+  const appointmentId = createBody.appointment.id;
+
+  const listResponse = await fetch(
+    `${baseUrl}/api/appointments?q=Pet%20da%20Agenda&type=consultation&status=scheduled&veterinarianId=${vet.id}`,
+    { headers: { cookie: adminCookie } },
+  );
+  const listBody = await listResponse.json();
+
+  assert.equal(listResponse.status, 200);
+  assert.equal(listBody.total, 1);
+  assert.equal(listBody.appointments[0].id, appointmentId);
+
+  const conflictResponse = await fetch(`${baseUrl}/api/appointments`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: adminCookie,
+    },
+    body: JSON.stringify({
+      animalId: animal.id,
+      veterinarianId: vet.id,
+      type: "vaccination",
+      scheduledAt: "2030-01-15T13:15:00.000Z",
+      durationMinutes: 30,
+    }),
+  });
+  const conflictBody = await conflictResponse.json();
+
+  assert.equal(conflictResponse.status, 409);
+  assert.equal(conflictBody.error.code, "appointment_conflict");
+
+  const updateResponse = await fetch(
+    `${baseUrl}/api/appointments/${appointmentId}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        cookie: adminCookie,
+      },
+      body: JSON.stringify({
+        animalId: animal.id,
+        veterinarianId: vet.id,
+        type: "surgery",
+        scheduledAt: "2030-01-15T14:00:00.000Z",
+        durationMinutes: 60,
+        status: "scheduled",
+        notes: "Procedimento cirúrgico.",
+      }),
+    },
+  );
+  const updateBody = await updateResponse.json();
+
+  assert.equal(updateResponse.status, 200);
+  assert.equal(updateBody.appointment.type, "surgery");
+
+  const cancelResponse = await fetch(
+    `${baseUrl}/api/appointments/${appointmentId}/cancel`,
+    { method: "POST", headers: { cookie: adminCookie } },
+  );
+  const cancelBody = await cancelResponse.json();
+
+  assert.equal(cancelResponse.status, 200);
+  assert.equal(cancelBody.appointment.status, "cancelled");
+
+  const rebookResponse = await fetch(`${baseUrl}/api/appointments`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: adminCookie,
+    },
+    body: JSON.stringify({
+      animalId: animal.id,
+      veterinarianId: vet.id,
+      type: "vaccination",
+      scheduledAt: "2030-01-15T14:00:00.000Z",
+      durationMinutes: 60,
+    }),
+  });
+
+  assert.equal(rebookResponse.status, 201);
+
+  const vaccinationList = await fetch(
+    `${baseUrl}/api/appointments?type=vaccination`,
+    { headers: { cookie: adminCookie } },
+  );
+  assert.equal((await vaccinationList.json()).total, 1);
+
+  const anonymous = await fetch(`${baseUrl}/api/appointments`);
+  assert.equal(anonymous.status, 401);
+
+  const auditActions = database.connection
+    .prepare(
+      `SELECT DISTINCT action
+       FROM audit_logs
+       WHERE action LIKE 'appointments.%'
+       ORDER BY action`,
+    )
+    .all()
+    .map((row) => row.action);
+
+  assert.deepEqual(auditActions, [
+    "appointments.cancel",
+    "appointments.create",
+    "appointments.update",
+  ]);
+});
