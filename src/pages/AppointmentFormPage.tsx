@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { SearchIcon } from "../components/icons";
 import {
   ApiError,
   createAppointment,
@@ -8,7 +9,10 @@ import {
   updateAppointment,
 } from "../lib/api";
 import {
+  formatDate,
+  formatTime,
   fromDateTimeLocal,
+  getInitials,
   toDateTimeLocal,
 } from "../lib/format";
 import { Link, navigate, setFlash } from "../lib/navigation";
@@ -18,6 +22,7 @@ import type {
   AppointmentStatus,
   AppointmentType,
   Veterinarian,
+  VeterinarianAvailabilityFilter,
 } from "../types/appointments";
 import "./UsersPage.css";
 import "./AppointmentsPage.css";
@@ -42,6 +47,30 @@ const STATUSES: { value: AppointmentStatus; label: string }[] = [
   { value: "cancelled", label: "Cancelada" },
 ];
 
+function getAvailabilityFilter(
+  scheduledAt: string,
+  durationMinutes: string,
+): VeterinarianAvailabilityFilter | null {
+  const date = new Date(scheduledAt);
+  const duration = Number(durationMinutes);
+
+  if (
+    !scheduledAt ||
+    Number.isNaN(date.getTime()) ||
+    !Number.isInteger(duration) ||
+    duration < 15 ||
+    duration > 480
+  ) {
+    return null;
+  }
+
+  return {
+    weekday: date.getDay() === 0 ? 7 : date.getDay(),
+    startMinutes: date.getHours() * 60 + date.getMinutes(),
+    durationMinutes: duration,
+  };
+}
+
 export default function AppointmentFormPage({
   user,
   mode,
@@ -59,8 +88,11 @@ export default function AppointmentFormPage({
   const [notes, setNotes] = useState("");
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [veterinarians, setVeterinarians] = useState<Veterinarian[]>([]);
+  const [vetSearch, setVetSearch] = useState("");
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isLoadingVets, setIsLoadingVets] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [vetsError, setVetsError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -86,18 +118,13 @@ export default function AppointmentFormPage({
         ? fetchAppointment(appointmentId)
         : Promise.resolve(null);
 
-    Promise.all([
-      fetchAnimals(),
-      fetchVeterinarians(),
-      appointmentRequest,
-    ])
-      .then(([animalData, veterinarianData, appointment]) => {
+    Promise.all([fetchAnimals(), appointmentRequest])
+      .then(([animalData, appointment]) => {
         if (!isActiveRequest) {
           return;
         }
 
         setAnimals(animalData);
-        setVeterinarians(veterinarianData);
 
         if (appointment) {
           setAnimalId(appointment.animalId);
@@ -129,6 +156,53 @@ export default function AppointmentFormPage({
     };
   }, [canWrite, isEdit, appointmentId]);
 
+  useEffect(() => {
+    if (!canWrite) {
+      return;
+    }
+
+    let isActiveRequest = true;
+    const filter = getAvailabilityFilter(scheduledAt, durationMinutes);
+    setIsLoadingVets(true);
+    setVetsError(null);
+
+    fetchVeterinarians(filter ?? undefined)
+      .then((data) => {
+        if (!isActiveRequest) {
+          return;
+        }
+
+        setVeterinarians(data);
+
+        if (filter) {
+          setVeterinarianId((current) =>
+            current && !data.some((veterinarian) => veterinarian.id === current)
+              ? ""
+              : current,
+          );
+        }
+      })
+      .catch((error) => {
+        if (isActiveRequest) {
+          setVeterinarians([]);
+          setVetsError(
+            error instanceof Error
+              ? error.message
+              : "Não foi possível carregar os profissionais.",
+          );
+        }
+      })
+      .finally(() => {
+        if (isActiveRequest) {
+          setIsLoadingVets(false);
+        }
+      });
+
+    return () => {
+      isActiveRequest = false;
+    };
+  }, [canWrite, scheduledAt, durationMinutes]);
+
   function clearError(field: string) {
     setErrors((current) => {
       if (!current[field]) {
@@ -144,7 +218,12 @@ export default function AppointmentFormPage({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (isSubmitting || isLoadingData || loadError) {
+    if (
+      isSubmitting ||
+      isLoadingData ||
+      isLoadingVets ||
+      loadError
+    ) {
       return;
     }
 
@@ -264,202 +343,315 @@ export default function AppointmentFormPage({
     );
   }
 
-  const missingData = animals.length === 0 || veterinarians.length === 0;
+  const hasSchedule = Boolean(
+    scheduledAt && !Number.isNaN(new Date(scheduledAt).getTime()),
+  );
+  const hasNoVets = !isLoadingVets && veterinarians.length === 0;
+  const missingData = animals.length === 0 || hasNoVets;
+  const search = vetSearch.trim().toLocaleLowerCase("pt-BR");
+  const visibleVeterinarians = veterinarians.filter(
+    (veterinarian) =>
+      !search ||
+      veterinarian.name.toLocaleLowerCase("pt-BR").includes(search) ||
+      (veterinarian.email ?? "").toLocaleLowerCase("pt-BR").includes(search),
+  );
+  const availabilityLabel = hasSchedule
+    ? `Disponíveis em ${formatDate(scheduledAt)} às ${formatTime(scheduledAt)}`
+    : "Selecione data e horário para filtrar automaticamente pela disponibilidade.";
 
   return (
-    <div className="user-form-page">
+    <div className="user-form-page appointment-form-page">
       <Link className="back-link" to="/agenda">
         ← Voltar para a agenda
       </Link>
 
-      <section
-        className="user-form-card"
-        aria-labelledby="appointment-form-title"
-      >
-        <header className="user-form-card__header">
-          <h2 id="appointment-form-title">
-            {isEdit ? "Editar agendamento" : "Novo agendamento"}
-          </h2>
-          <p>
-            {isEdit
-              ? "Atualize o animal, o profissional, o horário ou a situação."
-              : "Agende uma consulta, operação ou vacinação."}
-          </p>
-        </header>
+      <div className="appointment-form-layout">
+        <section
+          className="user-form-card"
+          aria-labelledby="appointment-form-title"
+        >
+          <header className="user-form-card__header">
+            <h2 id="appointment-form-title">
+              {isEdit ? "Editar agendamento" : "Novo agendamento"}
+            </h2>
+            <p>
+              {isEdit
+                ? "Atualize o animal, o profissional, o horário ou a situação."
+                : "Agende uma consulta, operação ou vacinação."}
+            </p>
+          </header>
 
-        {missingData ? (
-          <div className="form-alert" role="alert">
-            {animals.length === 0
-              ? "Nenhum animal cadastrado. Cadastre um pet antes de agendar."
-              : "Nenhum veterinário ativo encontrado. Solicite ao administrador a criação de um usuário com papel Veterinário."}
-          </div>
-        ) : null}
-
-        <form className="user-form" noValidate onSubmit={handleSubmit}>
-          {submitError ? (
+          {missingData ? (
             <div className="form-alert" role="alert">
-              {submitError}
+              {animals.length === 0
+                ? "Nenhum animal cadastrado. Cadastre um pet antes de agendar."
+                : hasSchedule
+                  ? "Nenhum profissional disponível para o horário selecionado."
+                  : "Nenhum veterinário ativo encontrado. Solicite ao administrador a criação de um usuário com papel Veterinário."}
             </div>
           ) : null}
 
-          <div className="form-field form-field--full">
-            <label htmlFor="appointment-animal">Animal</label>
-            <select
-              id="appointment-animal"
-              value={animalId}
-              aria-invalid={Boolean(errors.animalId)}
-              onChange={(event) => {
-                setAnimalId(event.target.value);
-                clearError("animalId");
-              }}
-            >
-              <option value="">Selecione o animal</option>
-              {animals.map((animal) => (
-                <option value={animal.id} key={animal.id}>
-                  {animal.name} — {animal.tutorName}
-                </option>
-              ))}
-            </select>
-            {errors.animalId ? (
-              <p className="form-error" role="alert">
-                {errors.animalId}
-              </p>
+          <form className="user-form" noValidate onSubmit={handleSubmit}>
+            {submitError ? (
+              <div className="form-alert" role="alert">
+                {submitError}
+              </div>
             ) : null}
-          </div>
 
-          <div className="form-field">
-            <label htmlFor="appointment-veterinarian">Profissional</label>
-            <select
-              id="appointment-veterinarian"
-              value={veterinarianId}
-              aria-invalid={Boolean(errors.veterinarianId)}
-              onChange={(event) => {
-                setVeterinarianId(event.target.value);
-                clearError("veterinarianId");
-              }}
-            >
-              <option value="">Selecione o veterinário</option>
-              {veterinarians.map((veterinarian) => (
-                <option value={veterinarian.id} key={veterinarian.id}>
-                  {veterinarian.name}
-                </option>
-              ))}
-            </select>
-            {errors.veterinarianId ? (
-              <p className="form-error" role="alert">
-                {errors.veterinarianId}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="form-field">
-            <label htmlFor="appointment-type">Tipo</label>
-            <select
-              id="appointment-type"
-              value={type}
-              onChange={(event) =>
-                setType(event.target.value as AppointmentType)
-              }
-            >
-              {TYPES.map((option) => (
-                <option value={option.value} key={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="form-field">
-            <label htmlFor="appointment-datetime">Data e horário</label>
-            <input
-              id="appointment-datetime"
-              type="datetime-local"
-              value={scheduledAt}
-              aria-invalid={Boolean(errors.scheduledAt)}
-              onChange={(event) => {
-                setScheduledAt(event.target.value);
-                clearError("scheduledAt");
-              }}
-            />
-            {errors.scheduledAt ? (
-              <p className="form-error" role="alert">
-                {errors.scheduledAt}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="form-field">
-            <label htmlFor="appointment-duration">Duração (minutos)</label>
-            <input
-              id="appointment-duration"
-              type="number"
-              min={15}
-              max={480}
-              step={15}
-              value={durationMinutes}
-              aria-invalid={Boolean(errors.durationMinutes)}
-              onChange={(event) => {
-                setDurationMinutes(event.target.value);
-                clearError("durationMinutes");
-              }}
-            />
-            {errors.durationMinutes ? (
-              <p className="form-error" role="alert">
-                {errors.durationMinutes}
-              </p>
-            ) : null}
-          </div>
-
-          {isEdit ? (
-            <div className="form-field">
-              <label htmlFor="appointment-status">Situação</label>
+            <div className="form-field form-field--full">
+              <label htmlFor="appointment-animal">Animal</label>
               <select
-                id="appointment-status"
-                value={status}
+                id="appointment-animal"
+                value={animalId}
+                aria-invalid={Boolean(errors.animalId)}
+                onChange={(event) => {
+                  setAnimalId(event.target.value);
+                  clearError("animalId");
+                }}
+              >
+                <option value="">Selecione o animal</option>
+                {animals.map((animal) => (
+                  <option value={animal.id} key={animal.id}>
+                    {animal.name} — {animal.tutorName}
+                  </option>
+                ))}
+              </select>
+              {errors.animalId ? (
+                <p className="form-error" role="alert">
+                  {errors.animalId}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="form-field">
+              <label htmlFor="appointment-veterinarian">Profissional</label>
+              <select
+                id="appointment-veterinarian"
+                value={veterinarianId}
+                disabled={isLoadingVets || veterinarians.length === 0}
+                aria-invalid={Boolean(errors.veterinarianId)}
+                onChange={(event) => {
+                  setVeterinarianId(event.target.value);
+                  clearError("veterinarianId");
+                }}
+              >
+                <option value="">
+                  {isLoadingVets
+                    ? "Carregando profissionais..."
+                    : "Selecione o veterinário"}
+                </option>
+                {veterinarians.map((veterinarian) => (
+                  <option value={veterinarian.id} key={veterinarian.id}>
+                    {veterinarian.name}
+                  </option>
+                ))}
+              </select>
+              {errors.veterinarianId ? (
+                <p className="form-error" role="alert">
+                  {errors.veterinarianId}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="form-field">
+              <label htmlFor="appointment-type">Tipo</label>
+              <select
+                id="appointment-type"
+                value={type}
                 onChange={(event) =>
-                  setStatus(event.target.value as AppointmentStatus)
+                  setType(event.target.value as AppointmentType)
                 }
               >
-                {STATUSES.map((option) => (
+                {TYPES.map((option) => (
                   <option value={option.value} key={option.value}>
                     {option.label}
                   </option>
                 ))}
               </select>
             </div>
-          ) : null}
 
-          <div className="form-field form-field--full">
-            <label htmlFor="appointment-notes">Observações</label>
-            <textarea
-              id="appointment-notes"
-              rows={3}
-              placeholder="Motivo, preparo, observações do atendimento..."
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-            />
-          </div>
+            <div className="form-field">
+              <label htmlFor="appointment-datetime">Data e horário</label>
+              <input
+                id="appointment-datetime"
+                type="datetime-local"
+                value={scheduledAt}
+                aria-invalid={Boolean(errors.scheduledAt)}
+                onChange={(event) => {
+                  setScheduledAt(event.target.value);
+                  clearError("scheduledAt");
+                }}
+              />
+              {errors.scheduledAt ? (
+                <p className="form-error" role="alert">
+                  {errors.scheduledAt}
+                </p>
+              ) : null}
+            </div>
 
-          <div className="form-actions">
-            <Link className="button button--ghost" to="/agenda">
-              Cancelar
-            </Link>
-            <button
-              className="button button--primary"
-              type="submit"
-              disabled={isSubmitting || missingData}
-            >
-              {isSubmitting
-                ? isEdit
-                  ? "Salvando..."
-                  : "Agendando..."
-                : isEdit
-                  ? "Salvar alterações"
-                  : "Agendar"}
-            </button>
-          </div>
-        </form>
-      </section>
+            <div className="form-field">
+              <label htmlFor="appointment-duration">Duração (minutos)</label>
+              <input
+                id="appointment-duration"
+                type="number"
+                min={15}
+                max={480}
+                step={15}
+                value={durationMinutes}
+                aria-invalid={Boolean(errors.durationMinutes)}
+                onChange={(event) => {
+                  setDurationMinutes(event.target.value);
+                  clearError("durationMinutes");
+                }}
+              />
+              {errors.durationMinutes ? (
+                <p className="form-error" role="alert">
+                  {errors.durationMinutes}
+                </p>
+              ) : null}
+            </div>
+
+            {isEdit ? (
+              <div className="form-field">
+                <label htmlFor="appointment-status">Situação</label>
+                <select
+                  id="appointment-status"
+                  value={status}
+                  onChange={(event) =>
+                    setStatus(event.target.value as AppointmentStatus)
+                  }
+                >
+                  {STATUSES.map((option) => (
+                    <option value={option.value} key={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
+            <div className="form-field form-field--full">
+              <label htmlFor="appointment-notes">Observações</label>
+              <textarea
+                id="appointment-notes"
+                rows={3}
+                placeholder="Motivo, preparo, observações do atendimento..."
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+              />
+            </div>
+
+            <div className="form-actions">
+              <Link className="button button--ghost" to="/agenda">
+                Cancelar
+              </Link>
+              <button
+                className="button button--primary"
+                type="submit"
+                disabled={
+                  isSubmitting ||
+                  missingData ||
+                  isLoadingVets ||
+                  !veterinarianId
+                }
+              >
+                {isSubmitting
+                  ? isEdit
+                    ? "Salvando..."
+                    : "Agendando..."
+                  : isEdit
+                    ? "Salvar alterações"
+                    : "Agendar"}
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <aside
+          className="doctor-picker"
+          aria-labelledby="doctor-picker-title"
+        >
+          <header className="doctor-picker__header">
+            <div>
+              <h2 id="doctor-picker-title">Profissionais</h2>
+              <p>Selecione quem realizará o atendimento.</p>
+            </div>
+            <span className="doctor-picker__count">
+              {visibleVeterinarians.length}
+            </span>
+          </header>
+
+          <label className="doctor-picker__search">
+            <span className="filter-search">
+              <SearchIcon />
+              <input
+                className="filter-input"
+                type="search"
+                placeholder="Buscar por nome ou e-mail"
+                value={vetSearch}
+                onChange={(event) => setVetSearch(event.target.value)}
+              />
+            </span>
+          </label>
+
+          <p className="doctor-picker__hint">{availabilityLabel}</p>
+
+          {isLoadingVets ? (
+            <div className="doctor-picker__state" role="status">
+              <strong>Carregando profissionais...</strong>
+            </div>
+          ) : vetsError ? (
+            <div className="users-error" role="alert">
+              {vetsError}
+            </div>
+          ) : visibleVeterinarians.length === 0 ? (
+            <div className="doctor-picker__state">
+              <strong>
+                {search
+                  ? "Nenhum profissional encontrado para a busca."
+                  : hasSchedule
+                    ? "Nenhum profissional disponível neste horário."
+                    : "Nenhum veterinário ativo encontrado."}
+              </strong>
+              {hasSchedule && !search ? (
+                <p>Ajuste a data, o horário ou a duração do atendimento.</p>
+              ) : null}
+            </div>
+          ) : (
+            <div className="doctor-picker__list">
+              {visibleVeterinarians.map((veterinarian) => {
+                const isSelected = veterinarian.id === veterinarianId;
+
+                return (
+                  <button
+                    className={`doctor-option${isSelected ? " is-selected" : ""}`}
+                    type="button"
+                    key={veterinarian.id}
+                    aria-pressed={isSelected}
+                    onClick={() => {
+                      setVeterinarianId(veterinarian.id);
+                      clearError("veterinarianId");
+                    }}
+                  >
+                    <span className="user-avatar" aria-hidden="true">
+                      {getInitials(veterinarian.name)}
+                    </span>
+                    <span className="doctor-option__text">
+                      <strong>{veterinarian.name}</strong>
+                      <small>{veterinarian.email ?? "Veterinário"}</small>
+                    </span>
+                    {isSelected ? (
+                      <span className="doctor-option__check" aria-hidden="true">
+                        ✓
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </aside>
+      </div>
     </div>
   );
 }

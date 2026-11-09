@@ -24,6 +24,7 @@ import type {
   AvailabilitySlot,
   Veterinarian,
   VeterinarianAvailability,
+  VeterinarianAvailabilityFilter,
 } from "../types/appointments";
 
 type ApiErrorPayload = {
@@ -343,9 +344,20 @@ export async function cancelAppointment(id: string): Promise<Appointment> {
   return response.appointment;
 }
 
-export async function fetchVeterinarians(): Promise<Veterinarian[]> {
+export async function fetchVeterinarians(
+  filter?: VeterinarianAvailabilityFilter,
+): Promise<Veterinarian[]> {
+  const params = new URLSearchParams();
+
+  if (filter) {
+    params.set("weekday", String(filter.weekday));
+    params.set("startMinutes", String(filter.startMinutes));
+    params.set("durationMinutes", String(filter.durationMinutes));
+  }
+
+  const query = params.toString();
   const response = await request<{ veterinarians: Veterinarian[] }>(
-    "/veterinarians",
+    `/veterinarians${query ? `?${query}` : ""}`,
     { method: "GET" },
   );
 

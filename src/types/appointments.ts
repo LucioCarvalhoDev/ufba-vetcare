@@ -52,3 +52,9 @@ export type VeterinarianAvailability = {
   veterinarian: Veterinarian;
   slots: AvailabilitySlot[];
 };
+
+export type VeterinarianAvailabilityFilter = {
+  weekday: number;
+  startMinutes: number;
+  durationMinutes: number;
+};
