@@ -42,6 +42,14 @@ function normalizeSlots(slots) {
 }
 
 export function createAvailabilityRepository(connection) {
+  const selectActiveVeterinarians = connection.prepare(
+    `SELECT DISTINCT u.id, u.name, u.email
+     FROM users u
+     INNER JOIN user_roles ur ON ur.user_id = u.id
+     INNER JOIN roles r ON r.id = ur.role_id
+     WHERE u.is_active = 1 AND r.slug = 'veterinario'
+     ORDER BY u.name COLLATE NOCASE ASC`,
+  );
   const selectVeterinarian = connection.prepare(
     `SELECT u.id, u.name, u.email
      FROM users u
@@ -92,6 +100,70 @@ export function createAvailabilityRepository(connection) {
   return {
     getVeterinarianAvailability(id) {
       return readAvailability(id);
+    },
+
+    listAvailableVeterinarians({
+      weekday,
+      startMinutes,
+      durationMinutes,
+    }) {
+      const day = Number(weekday);
+      const start = Number(startMinutes);
+      const duration = Number(durationMinutes);
+
+      if (
+        !Number.isInteger(day) ||
+        day < 1 ||
+        day > 7 ||
+        !Number.isInteger(start) ||
+        start < 0 ||
+        start > 1439 ||
+        !Number.isInteger(duration) ||
+        duration < 15 ||
+        duration > 480
+      ) {
+        throw domainError(
+          "INVALID_AVAILABILITY_QUERY",
+          "Filtro de disponibilidade inválido.",
+        );
+      }
+
+      if (start + duration > 1440) {
+        return [];
+      }
+
+      const required = [];
+      const firstSlot = Math.floor(start / 30) * 30;
+
+      for (let minutes = firstSlot; minutes < start + duration; minutes += 30) {
+        required.push(minutes);
+      }
+
+      const slotsByVeterinarian = new Map();
+      const rows = connection
+        .prepare(
+          `SELECT veterinarian_id, start_minutes
+           FROM veterinarian_availability
+           WHERE weekday = ?`,
+        )
+        .all(day);
+
+      for (const row of rows) {
+        if (!slotsByVeterinarian.has(row.veterinarian_id)) {
+          slotsByVeterinarian.set(row.veterinarian_id, new Set());
+        }
+        slotsByVeterinarian
+          .get(row.veterinarian_id)
+          .add(row.start_minutes);
+      }
+
+      return selectActiveVeterinarians
+        .all()
+        .filter((veterinarian) =>
+          required.every((minutes) =>
+            slotsByVeterinarian.get(veterinarian.id)?.has(minutes),
+          ),
+        );
     },
 
     setVeterinarianAvailability(id, slots) {

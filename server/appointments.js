@@ -123,9 +123,43 @@ export function createAppointmentsRouter({
   return async function handleAppointments(req, res, pathname) {
     if (pathname === "/api/veterinarians" && req.method === "GET") {
       requirePermission(req, res, "veterinarians.read");
-      return sendJson(res, 200, {
-        veterinarians: database.listVeterinarians(),
-      });
+      const params = new URL(req.url ?? "/", "http://localhost").searchParams;
+      const availabilityKeys = [
+        "weekday",
+        "startMinutes",
+        "durationMinutes",
+      ];
+      const hasAvailabilityFilter = availabilityKeys.some((key) =>
+        params.has(key),
+      );
+
+      if (!hasAvailabilityFilter) {
+        return sendJson(res, 200, {
+          veterinarians: database.listVeterinarians(),
+        });
+      }
+
+      if (!availabilityKeys.every((key) => params.has(key))) {
+        throw new HttpError(
+          400,
+          "invalid_availability_query",
+          "Informe weekday, startMinutes e durationMinutes.",
+        );
+      }
+
+      let veterinarians;
+
+      try {
+        veterinarians = database.listAvailableVeterinarians({
+          weekday: Number(params.get("weekday")),
+          startMinutes: Number(params.get("startMinutes")),
+          durationMinutes: Number(params.get("durationMinutes")),
+        });
+      } catch (error) {
+        throw toHttpError(error, HttpError);
+      }
+
+      return sendJson(res, 200, { veterinarians });
     }
 
     const cancelMatch = pathname.match(

@@ -1111,3 +1111,39 @@ test("disponibilidade semanal do veterinário é editável e protegida", async (
 
   assert.equal(audit?.result, "success");
 });
+
+test("lista veterinários disponíveis conforme dia, início e duração", async () => {
+  const adminLogin = await loginRequest(TEST_EMAIL, TEST_PASSWORD);
+  const adminCookie = sessionCookie(adminLogin);
+  const vet = database.getUserAuthByEmail("vet.disponibilidade@vetcare.com");
+
+  assert.ok(vet);
+
+  async function available(query) {
+    const response = await fetch(`${baseUrl}/api/veterinarians?${query}`, {
+      headers: { cookie: adminCookie },
+    });
+    return { response, body: await response.json() };
+  }
+
+  const oneHour = await available(
+    `weekday=1&startMinutes=480&durationMinutes=60`,
+  );
+  assert.equal(oneHour.response.status, 200);
+  assert.ok(oneHour.body.veterinarians.some((item) => item.id === vet.id));
+
+  const oneAndHalf = await available(
+    `weekday=1&startMinutes=480&durationMinutes=90`,
+  );
+  assert.ok(!oneAndHalf.body.veterinarians.some((item) => item.id === vet.id));
+
+  const tuesday = await available(
+    `weekday=2&startMinutes=540&durationMinutes=30`,
+  );
+  assert.ok(tuesday.body.veterinarians.some((item) => item.id === vet.id));
+
+  const invalid = await available(
+    `weekday=8&startMinutes=480&durationMinutes=30`,
+  );
+  assert.equal(invalid.response.status, 400);
+});
