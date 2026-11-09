@@ -1289,6 +1289,14 @@ test("dashboard do veterinário resume o dia, o mês e a semana", async () => {
     cancelled: 1,
   });
   assert.equal(body.appointments.length, 4);
+  assert.equal(body.upcoming.length, 4);
+  assert.deepEqual(
+    body.upcoming.map((appointment) => appointment.date),
+    ["2030-02-11", "2030-02-11", "2030-02-11", "2030-02-12"],
+  );
+  assert.ok(
+    body.upcoming.every((appointment) => appointment.status !== "cancelled"),
+  );
   assert.equal(body.month.key, "2030-02");
   assert.deepEqual(
     body.month.days.map((day) => day.date),

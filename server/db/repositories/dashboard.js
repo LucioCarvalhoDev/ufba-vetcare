@@ -97,6 +97,19 @@ export function createDashboardRepository(connection) {
        AND ap.scheduled_at < ?
      ORDER BY ap.scheduled_at ASC`,
   );
+  const selectUpcoming = connection.prepare(
+    `SELECT ap.id, ap.scheduled_at, ap.duration_minutes, ap.status, ap.type,
+            a.name AS animal_name, a.species AS animal_species,
+            t.name AS tutor_name
+     FROM appointments ap
+     INNER JOIN animals a ON a.id = ap.animal_id
+     INNER JOIN tutors t ON t.id = a.tutor_id
+     WHERE ap.veterinarian_id = ?
+       AND ap.status != 'cancelled'
+       AND ap.scheduled_at >= ?
+       AND ap.scheduled_at < ?
+     ORDER BY ap.scheduled_at ASC`,
+  );
   const selectRange = connection.prepare(
     `SELECT scheduled_at
      FROM appointments
@@ -150,12 +163,7 @@ export function createDashboardRepository(connection) {
       const weekStart = startOfWeek(todayStart);
       const weekEnd = addDays(weekStart, 7);
 
-      const rows = selectTodayAppointments.all(
-        veterinarian.id,
-        todayStart.toISOString(),
-        todayEnd.toISOString(),
-      );
-      const appointments = rows.map((row) => ({
+      const mapAppointment = (row) => ({
         id: row.id,
         scheduledAt: row.scheduled_at,
         durationMinutes: row.duration_minutes,
@@ -164,7 +172,23 @@ export function createDashboardRepository(connection) {
         animalName: row.animal_name,
         animalSpecies: row.animal_species,
         tutorName: row.tutor_name,
-      }));
+      });
+      const rows = selectTodayAppointments.all(
+        veterinarian.id,
+        todayStart.toISOString(),
+        todayEnd.toISOString(),
+      );
+      const appointments = rows.map(mapAppointment);
+      const upcoming = selectUpcoming
+        .all(
+          veterinarian.id,
+          todayStart.toISOString(),
+          addDays(todayStart, 2).toISOString(),
+        )
+        .map((row) => ({
+          ...mapAppointment(row),
+          date: formatDateKey(new Date(row.scheduled_at)),
+        }));
       const metrics = {
         total: appointments.length,
         completed: appointments.filter((item) => item.status === "completed")
@@ -215,6 +239,7 @@ export function createDashboardRepository(connection) {
         },
         metrics,
         appointments,
+        upcoming,
         month: {
           key: `${monthStart.getFullYear()}-${pad(monthStart.getMonth() + 1)}`,
           days: [...monthCounts.entries()]
