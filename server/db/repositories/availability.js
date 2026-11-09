@@ -41,6 +41,34 @@ function normalizeSlots(slots) {
   );
 }
 
+function parseDateKey(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value ?? ""));
+
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
+function formatDateKey(date) {
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 export function createAvailabilityRepository(connection) {
   const selectActiveVeterinarians = connection.prepare(
     `SELECT DISTINCT u.id, u.name, u.email
@@ -106,6 +134,7 @@ export function createAvailabilityRepository(connection) {
       weekday,
       startMinutes,
       durationMinutes,
+      date = "",
     }) {
       const day = Number(weekday);
       const start = Number(startMinutes);
@@ -157,13 +186,174 @@ export function createAvailabilityRepository(connection) {
           .add(row.start_minutes);
       }
 
-      return selectActiveVeterinarians
+      const available = selectActiveVeterinarians
         .all()
         .filter((veterinarian) =>
           required.every((minutes) =>
             slotsByVeterinarian.get(veterinarian.id)?.has(minutes),
           ),
         );
+
+      if (!date) {
+        return available;
+      }
+
+      const dateValue = parseDateKey(date);
+
+      if (!dateValue) {
+        throw domainError(
+          "INVALID_AVAILABILITY_QUERY",
+          "Data de disponibilidade inválida.",
+        );
+      }
+
+      const localStart = new Date(
+        dateValue.getFullYear(),
+        dateValue.getMonth(),
+        dateValue.getDate(),
+        0,
+        start,
+        0,
+        0,
+      );
+      const localEnd = new Date(localStart.getTime() + duration * 60_000);
+      const conflicts = new Set(
+        connection
+          .prepare(
+            `SELECT DISTINCT veterinarian_id
+             FROM appointments
+             WHERE status != 'cancelled'
+               AND scheduled_at < ?
+               AND ends_at > ?`,
+          )
+          .all(localEnd.toISOString(), localStart.toISOString())
+          .map((row) => row.veterinarian_id),
+      );
+
+      return available.filter((veterinarian) => !conflicts.has(veterinarian.id));
+    },
+
+    getSchedule(from) {
+      const startDate = parseDateKey(from);
+
+      if (!startDate) {
+        throw domainError(
+          "INVALID_SCHEDULE_RANGE",
+          "Data inicial da agenda inválida.",
+        );
+      }
+
+      const rangeStart = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        startDate.getDate(),
+        0,
+        0,
+        0,
+        0,
+      );
+      const rangeEnd = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        startDate.getDate() + 7,
+        0,
+        0,
+        0,
+        0,
+      );
+      const activeVeterinarians = selectActiveVeterinarians.all();
+      const activeIds = new Set(
+        activeVeterinarians.map((veterinarian) => veterinarian.id),
+      );
+      const working = new Map();
+
+      for (const row of connection
+        .prepare(
+          `SELECT veterinarian_id, weekday, start_minutes
+           FROM veterinarian_availability`,
+        )
+        .all()) {
+        if (!activeIds.has(row.veterinarian_id)) {
+          continue;
+        }
+
+        const key = `${row.weekday}:${row.start_minutes}`;
+
+        if (!working.has(key)) {
+          working.set(key, new Set());
+        }
+
+        working.get(key).add(row.veterinarian_id);
+      }
+
+      const booked = new Map();
+      const appointments = connection
+        .prepare(
+          `SELECT veterinarian_id, scheduled_at, duration_minutes
+           FROM appointments
+           WHERE status != 'cancelled'
+             AND scheduled_at >= ?
+             AND scheduled_at < ?`,
+        )
+        .all(rangeStart.toISOString(), rangeEnd.toISOString());
+
+      for (const appointment of appointments) {
+        const appointmentStart = new Date(appointment.scheduled_at);
+        const appointmentEnd = new Date(
+          appointmentStart.getTime() +
+            Number(appointment.duration_minutes) * 60_000,
+        );
+        const cursor = new Date(appointmentStart);
+        cursor.setSeconds(0, 0);
+        cursor.setMinutes(Math.floor(cursor.getMinutes() / 30) * 30);
+
+        while (cursor < appointmentEnd) {
+          if (cursor >= rangeStart && cursor < rangeEnd) {
+            const key = `${formatDateKey(cursor)}:${
+              cursor.getHours() * 60 + cursor.getMinutes()
+            }`;
+
+            if (!booked.has(key)) {
+              booked.set(key, new Set());
+            }
+
+            booked.get(key).add(appointment.veterinarian_id);
+          }
+
+          cursor.setTime(cursor.getTime() + 30 * 60_000);
+        }
+      }
+
+      const days = [];
+
+      for (let index = 0; index < 7; index += 1) {
+        const date = new Date(
+          startDate.getFullYear(),
+          startDate.getMonth(),
+          startDate.getDate() + index,
+        );
+        const weekday = date.getDay() === 0 ? 7 : date.getDay();
+        const dateKey = formatDateKey(date);
+        const slots = [];
+
+        for (let slot = 0; slot < 48; slot += 1) {
+          const minutes = slot * 30;
+          const workingSet = working.get(`${weekday}:${minutes}`);
+
+          if (!workingSet || workingSet.size === 0) {
+            slots.push("closed");
+            continue;
+          }
+
+          const bookedSet = booked.get(`${dateKey}:${minutes}`) ?? new Set();
+          const allBusy = [...workingSet].every((id) => bookedSet.has(id));
+          slots.push(allBusy ? "busy" : "free");
+        }
+
+        days.push({ date: dateKey, weekday, slots });
+      }
+
+      return { from: formatDateKey(startDate), days };
     },
 
     setVeterinarianAvailability(id, slots) {

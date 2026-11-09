@@ -1147,3 +1147,73 @@ test("lista veterinários disponíveis conforme dia, início e duração", async
   );
   assert.equal(invalid.response.status, 400);
 });
+
+test("agenda semanal distingue livre, ocupado e sem atendimento", async () => {
+  const adminLogin = await loginRequest(TEST_EMAIL, TEST_PASSWORD);
+  const adminCookie = sessionCookie(adminLogin);
+  const vet = database.getUserAuthByEmail("vet.disponibilidade@vetcare.com");
+
+  assert.ok(vet);
+
+  const tutor = database.createTutor({
+    name: "Tutor da Agenda Visual",
+    cpf: "777.888.999-00",
+  });
+  const animal = database.createAnimal({
+    tutorId: tutor.id,
+    name: "Pet da Agenda Visual",
+    species: "Gato",
+    sex: "female",
+  });
+
+  const appointment = await fetch(`${baseUrl}/api/appointments`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: adminCookie,
+    },
+    body: JSON.stringify({
+      animalId: animal.id,
+      veterinarianId: vet.id,
+      type: "consultation",
+      scheduledAt: new Date(2030, 1, 11, 8, 0).toISOString(),
+      durationMinutes: 30,
+    }),
+  });
+
+  assert.equal(appointment.status, 201);
+
+  const schedule = await fetch(
+    `${baseUrl}/api/schedule?from=2030-02-11`,
+    { headers: { cookie: adminCookie } },
+  );
+  const scheduleBody = await schedule.json();
+
+  assert.equal(schedule.status, 200);
+  assert.equal(scheduleBody.days.length, 7);
+  assert.equal(scheduleBody.days[0].date, "2030-02-11");
+  assert.equal(scheduleBody.days[0].slots[0], "closed");
+  assert.equal(scheduleBody.days[0].slots[16], "busy");
+  assert.equal(scheduleBody.days[0].slots[17], "free");
+  assert.equal(scheduleBody.days[1].slots[18], "free");
+
+  const busyFilter = await fetch(
+    `${baseUrl}/api/veterinarians?weekday=1&startMinutes=480&durationMinutes=30&date=2030-02-11`,
+    { headers: { cookie: adminCookie } },
+  );
+  const busyBody = await busyFilter.json();
+  assert.ok(!busyBody.veterinarians.some((item) => item.id === vet.id));
+
+  const freeFilter = await fetch(
+    `${baseUrl}/api/veterinarians?weekday=2&startMinutes=540&durationMinutes=30&date=2030-02-12`,
+    { headers: { cookie: adminCookie } },
+  );
+  const freeBody = await freeFilter.json();
+  assert.ok(freeBody.veterinarians.some((item) => item.id === vet.id));
+
+  const invalid = await fetch(
+    `${baseUrl}/api/schedule?from=2030-02-31`,
+    { headers: { cookie: adminCookie } },
+  );
+  assert.equal(invalid.status, 400);
+});

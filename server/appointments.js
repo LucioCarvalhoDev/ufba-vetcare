@@ -129,9 +129,9 @@ export function createAppointmentsRouter({
         "startMinutes",
         "durationMinutes",
       ];
-      const hasAvailabilityFilter = availabilityKeys.some((key) =>
-        params.has(key),
-      );
+      const hasAvailabilityFilter =
+        availabilityKeys.some((key) => params.has(key)) ||
+        params.has("date");
 
       if (!hasAvailabilityFilter) {
         return sendJson(res, 200, {
@@ -154,6 +154,7 @@ export function createAppointmentsRouter({
           weekday: Number(params.get("weekday")),
           startMinutes: Number(params.get("startMinutes")),
           durationMinutes: Number(params.get("durationMinutes")),
+          date: params.get("date") ?? "",
         });
       } catch (error) {
         throw toHttpError(error, HttpError);
