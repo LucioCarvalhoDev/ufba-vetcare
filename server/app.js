@@ -230,6 +230,117 @@ function managedUser(user) {
 }
 
 /**
+ * @param {Record<string, unknown>} body
+ * @param {{ passwordRequired?: boolean, statusRequired?: boolean }} options
+ */
+function parseUserPayload(
+  body,
+  { passwordRequired = false, statusRequired = false } = {},
+) {
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  const email =
+    typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const password = typeof body.password === "string" ? body.password : "";
+  const roleSlugs = Array.isArray(body.roleSlugs)
+    ? [
+        ...new Set(
+          body.roleSlugs
+            .filter((slug) => typeof slug === "string")
+            .map((slug) => slug.trim())
+            .filter(Boolean),
+        ),
+      ]
+    : [];
+  const isActive = body.isActive === undefined ? true : body.isActive;
+
+  if (name.length < 3 || name.length > 120) {
+    throw new HttpError(
+      400,
+      "invalid_name",
+      "O nome deve ter entre 3 e 120 caracteres.",
+    );
+  }
+
+  if (
+    !email ||
+    email.length > 254 ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  ) {
+    throw new HttpError(400, "invalid_email", "Informe um e-mail válido.");
+  }
+
+  if (passwordRequired || password.length > 0) {
+    if (password.length < 8 || password.length > 128) {
+      throw new HttpError(
+        400,
+        "invalid_password",
+        "A senha deve ter entre 8 e 128 caracteres.",
+      );
+    }
+  }
+
+  if (roleSlugs.length === 0 || roleSlugs.length > 10) {
+    throw new HttpError(
+      400,
+      "invalid_roles",
+      "Selecione ao menos um papel válido.",
+    );
+  }
+
+  if (typeof isActive !== "boolean" || (statusRequired && body.isActive === undefined)) {
+    throw new HttpError(
+      400,
+      "invalid_status",
+      "A situação deve ser ativa ou inativa.",
+    );
+  }
+
+  return {
+    name,
+    email,
+    password: password.length > 0 ? password : undefined,
+    roleSlugs,
+    isActive,
+  };
+}
+
+/**
+ * @param {Error & { code?: string }} error
+ */
+function mapUserMutationError(error) {
+  if (error.code === "EMAIL_IN_USE") {
+    return new HttpError(409, "email_in_use", error.message);
+  }
+
+  if (error.code === "USER_NOT_FOUND") {
+    return new HttpError(404, "user_not_found", error.message);
+  }
+
+  if (error.code === "LAST_ADMIN") {
+    return new HttpError(409, "last_admin", error.message);
+  }
+
+  if (
+    error.code === "UNKNOWN_ROLE" ||
+    error.code === "ROLE_REQUIRED" ||
+    error.code === "INVALID_NAME" ||
+    error.code === "INVALID_EMAIL"
+  ) {
+    return new HttpError(400, "invalid_user", error.message);
+  }
+
+  if (String(error.message).includes("UNIQUE constraint failed: users.email")) {
+    return new HttpError(
+      409,
+      "email_in_use",
+      "Já existe um usuário com este e-mail.",
+    );
+  }
+
+  return error;
+}
+
+/**
  * @param {string} pathname
  * @param {string} staticDir
  * @param {import("node:http").IncomingMessage} req
@@ -626,96 +737,13 @@ export function createVetCareServer({
 
     const authUser = requirePermission(req, res, "users.write");
     const body = await readJsonBody(req);
-
-    const name = typeof body.name === "string" ? body.name.trim() : "";
-    const email =
-      typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
-    const password = typeof body.password === "string" ? body.password : "";
-    const roleSlugs = Array.isArray(body.roleSlugs)
-      ? [
-          ...new Set(
-            body.roleSlugs
-              .filter((slug) => typeof slug === "string")
-              .map((slug) => slug.trim())
-              .filter(Boolean),
-          ),
-        ]
-      : [];
-    const isActive = body.isActive === undefined ? true : body.isActive;
-
-    if (name.length < 3 || name.length > 120) {
-      throw new HttpError(
-        400,
-        "invalid_name",
-        "O nome deve ter entre 3 e 120 caracteres.",
-      );
-    }
-
-    if (
-      !email ||
-      email.length > 254 ||
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-    ) {
-      throw new HttpError(400, "invalid_email", "Informe um e-mail válido.");
-    }
-
-    if (password.length < 8 || password.length > 128) {
-      throw new HttpError(
-        400,
-        "invalid_password",
-        "A senha deve ter entre 8 e 128 caracteres.",
-      );
-    }
-
-    if (roleSlugs.length === 0 || roleSlugs.length > 10) {
-      throw new HttpError(
-        400,
-        "invalid_roles",
-        "Selecione ao menos um papel válido.",
-      );
-    }
-
-    if (typeof isActive !== "boolean") {
-      throw new HttpError(
-        400,
-        "invalid_status",
-        "A situação deve ser ativa ou inativa.",
-      );
-    }
-
+    const input = parseUserPayload(body, { passwordRequired: true });
     let user;
 
     try {
-      user = await database.createUser({
-        name,
-        email,
-        password,
-        roleSlugs,
-        isActive,
-      });
+      user = await database.createUser(input);
     } catch (error) {
-      if (error.code === "EMAIL_IN_USE") {
-        throw new HttpError(409, "email_in_use", error.message);
-      }
-
-      if (
-        error.code === "UNKNOWN_ROLE" ||
-        error.code === "ROLE_REQUIRED" ||
-        error.code === "INVALID_NAME" ||
-        error.code === "INVALID_EMAIL"
-      ) {
-        throw new HttpError(400, "invalid_user", error.message);
-      }
-
-      if (String(error.message).includes("UNIQUE constraint failed: users.email")) {
-        throw new HttpError(
-          409,
-          "email_in_use",
-          "Já existe um usuário com este e-mail.",
-        );
-      }
-
-      throw error;
+      throw mapUserMutationError(error);
     }
 
     database.recordAudit({
@@ -726,10 +754,57 @@ export function createVetCareServer({
       result: "success",
       ipAddress: getClientIp(req),
       userAgent: getUserAgent(req),
-      metadata: { roleSlugs },
+      metadata: { roleSlugs: input.roleSlugs },
     });
 
     sendJson(res, 201, { user: managedUser(user) });
+  }
+
+  function handleGetUser(req, res, userId) {
+    requirePermission(req, res, "users.read");
+    const user = database.getUserAuthById(userId);
+
+    if (!user) {
+      throw new HttpError(404, "user_not_found", "Usuário não encontrado.");
+    }
+
+    sendJson(res, 200, { user: managedUser(user) });
+  }
+
+  async function handleUpdateUser(req, res, userId) {
+    if (!isSameOriginRequest(req)) {
+      throw new HttpError(403, "forbidden_origin", "Origem não autorizada.");
+    }
+
+    const authUser = requirePermission(req, res, "users.write");
+    const body = await readJsonBody(req);
+    const input = parseUserPayload(body, {
+      passwordRequired: false,
+      statusRequired: true,
+    });
+    let user;
+
+    try {
+      user = await database.updateUser(userId, input);
+    } catch (error) {
+      throw mapUserMutationError(error);
+    }
+
+    database.recordAudit({
+      userId: authUser.id,
+      actorEmail: authUser.email,
+      action: "users.update",
+      resource: user.id,
+      result: "success",
+      ipAddress: getClientIp(req),
+      userAgent: getUserAgent(req),
+      metadata: {
+        roleSlugs: input.roleSlugs,
+        passwordChanged: Boolean(input.password),
+      },
+    });
+
+    sendJson(res, 200, { user: managedUser(user) });
   }
 
   async function handleRequest(req, res) {
@@ -763,6 +838,26 @@ export function createVetCareServer({
 
       if (req.method === "GET" && pathname === "/api/roles") {
         return handleListRoles(req, res);
+      }
+
+      const userRoute = pathname.match(/^\/api\/users\/([^/]+)$/);
+
+      if (userRoute) {
+        let userId;
+
+        try {
+          userId = decodeURIComponent(userRoute[1]);
+        } catch {
+          throw new HttpError(400, "invalid_user_id", "Identificador inválido.");
+        }
+
+        if (req.method === "GET") {
+          return handleGetUser(req, res, userId);
+        }
+
+        if (req.method === "PUT") {
+          return handleUpdateUser(req, res, userId);
+        }
       }
 
       if (req.method === "GET" && pathname === "/api/health") {

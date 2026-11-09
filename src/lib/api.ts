@@ -7,6 +7,7 @@ import type {
 import type {
   CreateUserInput,
   ManagedUser,
+  UpdateUserInput,
   UserFilters,
 } from "../types/users";
 
@@ -131,6 +132,30 @@ export async function createManagedUser(
     method: "POST",
     body: JSON.stringify(input),
   });
+
+  return response.user;
+}
+
+export async function fetchUser(id: string): Promise<ManagedUser> {
+  const response = await request<{ user: ManagedUser }>(
+    `/users/${encodeURIComponent(id)}`,
+    { method: "GET" },
+  );
+
+  return response.user;
+}
+
+export async function updateManagedUser(
+  id: string,
+  input: UpdateUserInput,
+): Promise<ManagedUser> {
+  const response = await request<{ user: ManagedUser }>(
+    `/users/${encodeURIComponent(id)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(input),
+    },
+  );
 
   return response.user;
 }

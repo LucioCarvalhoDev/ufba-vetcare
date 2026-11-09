@@ -24,3 +24,11 @@ export type CreateUserInput = {
   roleSlugs: string[];
   isActive: boolean;
 };
+
+export type UpdateUserInput = {
+  name: string;
+  email: string;
+  password?: string;
+  roleSlugs: string[];
+  isActive: boolean;
+};

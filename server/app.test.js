@@ -429,3 +429,186 @@ test("filtra usuários por nome/e-mail, papel e situação", async () => {
   const invalidStatus = await listUsers("status=desconhecido");
   assert.equal(invalidStatus.response.status, 400);
 });
+
+test("consulta e atualiza usuário, valida permissões, duplicidade e senha", async () => {
+  const adminLogin = await loginRequest(TEST_EMAIL, TEST_PASSWORD);
+  const adminCookie = sessionCookie(adminLogin);
+  const maria = database.getUserAuthByEmail("maria@vetcare.com");
+  const admin = database.getUserAuthByEmail(TEST_EMAIL);
+
+  assert.ok(maria);
+  assert.ok(admin);
+
+  const getResponse = await fetch(`${baseUrl}/api/users/${maria.id}`, {
+    headers: { cookie: adminCookie },
+  });
+  const getBody = await getResponse.json();
+
+  assert.equal(getResponse.status, 200);
+  assert.equal(getBody.user.email, "maria@vetcare.com");
+
+  const missingResponse = await fetch(
+    `${baseUrl}/api/users/00000000-0000-4000-8000-000000000000`,
+    { headers: { cookie: adminCookie } },
+  );
+  assert.equal(missingResponse.status, 404);
+
+  const previousHash = maria.passwordHash;
+  const updateResponse = await fetch(`${baseUrl}/api/users/${maria.id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: adminCookie,
+    },
+    body: JSON.stringify({
+      name: "Maria Souza Lima",
+      email: "maria.lima@vetcare.com",
+      roleSlugs: ["recepcionista", "veterinario"],
+      isActive: false,
+    }),
+  });
+  const updateBody = await updateResponse.json();
+
+  assert.equal(updateResponse.status, 200);
+  assert.equal(updateBody.user.name, "Maria Souza Lima");
+  assert.equal(updateBody.user.email, "maria.lima@vetcare.com");
+  assert.equal(updateBody.user.isActive, false);
+  assert.equal(updateBody.user.roles.length, 2);
+
+  const afterNameUpdate = database.getUserAuthByEmail("maria.lima@vetcare.com");
+  assert.ok(afterNameUpdate);
+  assert.equal(afterNameUpdate.passwordHash, previousHash);
+
+  const audit = database.connection
+    .prepare(
+      `SELECT action, result, resource
+       FROM audit_logs
+       WHERE action = 'users.update' AND resource = ?
+       ORDER BY created_at DESC LIMIT 1`,
+    )
+    .get(maria.id);
+
+  assert.equal(audit?.result, "success");
+
+  const duplicate = await fetch(`${baseUrl}/api/users/${maria.id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: adminCookie,
+    },
+    body: JSON.stringify({
+      name: "Maria Souza Lima",
+      email: TEST_EMAIL,
+      roleSlugs: ["recepcionista"],
+      isActive: true,
+    }),
+  });
+  const duplicateBody = await duplicate.json();
+
+  assert.equal(duplicate.status, 409);
+  assert.equal(duplicateBody.error.code, "email_in_use");
+
+  const receptionistLogin = await loginRequest(
+    "recepcao@vetcare.com",
+    "SenhaRecepcao123!",
+  );
+  const receptionistCookie = sessionCookie(receptionistLogin);
+  const forbidden = await fetch(`${baseUrl}/api/users/${maria.id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: receptionistCookie,
+    },
+    body: JSON.stringify({
+      name: "Sem Permissão",
+      email: "sem-permissao-update@vetcare.com",
+      roleSlugs: ["recepcionista"],
+      isActive: true,
+    }),
+  });
+
+  assert.equal(forbidden.status, 403);
+
+  const passwordResponse = await fetch(`${baseUrl}/api/users/${maria.id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: adminCookie,
+    },
+    body: JSON.stringify({
+      name: "Maria Souza Lima",
+      email: "maria.lima@vetcare.com",
+      password: "NovaSenhaMaria123!",
+      roleSlugs: ["recepcionista", "veterinario"],
+      isActive: true,
+    }),
+  });
+
+  assert.equal(passwordResponse.status, 200);
+
+  const afterPasswordUpdate = database.getUserAuthByEmail(
+    "maria.lima@vetcare.com",
+  );
+  assert.ok(afterPasswordUpdate);
+  assert.notEqual(afterPasswordUpdate.passwordHash, previousHash);
+
+  const newPasswordLogin = await loginRequest(
+    "maria.lima@vetcare.com",
+    "NovaSenhaMaria123!",
+  );
+  assert.equal(newPasswordLogin.status, 200);
+
+  const oldPasswordLogin = await loginRequest(
+    "maria.lima@vetcare.com",
+    "SenhaMaria123!",
+  );
+  assert.equal(oldPasswordLogin.status, 401);
+
+  const lastAdminResponse = await fetch(`${baseUrl}/api/users/${admin.id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: adminCookie,
+    },
+    body: JSON.stringify({
+      name: admin.name,
+      email: admin.email,
+      roleSlugs: ["recepcionista"],
+      isActive: true,
+    }),
+  });
+  const lastAdminBody = await lastAdminResponse.json();
+
+  assert.equal(lastAdminResponse.status, 409);
+  assert.equal(lastAdminBody.error.code, "last_admin");
+
+  const adminAfter = database.getUserAuthByEmail(TEST_EMAIL);
+  assert.ok(adminAfter);
+  assert.equal(adminAfter.roles[0].slug, "administrador");
+});
+
+test("atualização de usuário inexistente retorna 404", async () => {
+  const adminLogin = await loginRequest(TEST_EMAIL, TEST_PASSWORD);
+  const cookie = sessionCookie(adminLogin);
+
+  const response = await fetch(
+    `${baseUrl}/api/users/00000000-0000-4000-8000-000000000000`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        cookie,
+      },
+      body: JSON.stringify({
+        name: "Inexistente",
+        email: "inexistente@vetcare.com",
+        roleSlugs: ["recepcionista"],
+        isActive: true,
+      }),
+    },
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 404);
+  assert.equal(body.error.code, "user_not_found");
+});

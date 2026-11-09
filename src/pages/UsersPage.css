@@ -790,3 +790,47 @@
     padding: 16px;
   }
 }
+
+.users-table th.users-table__actions,
+.users-table td.users-table__actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.user-edit-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--home-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--home-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.user-edit-button:hover {
+  border-color: var(--home-mint-300, #b8dbd1);
+  background: var(--home-surface);
+}
+
+.user-edit-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+@media (max-width: 640px) {
+  .user-edit-button {
+    padding: 7px;
+  }
+
+  .user-edit-button span {
+    display: none;
+  }
+}

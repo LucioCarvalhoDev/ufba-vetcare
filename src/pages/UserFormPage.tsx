@@ -1,18 +1,33 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ApiError, createManagedUser, fetchRoles } from "../lib/api";
+import {
+  ApiError,
+  createManagedUser,
+  fetchRoles,
+  fetchUser,
+  updateManagedUser,
+} from "../lib/api";
 import { Link, navigate, setFlash } from "../lib/navigation";
 import type { AuthUser, Role } from "../types/auth";
 import "./UsersPage.css";
 
-type UserCreatePageProps = {
+type UserFormMode = "create" | "edit";
+
+type UserFormPageProps = {
   user: AuthUser;
+  mode: UserFormMode;
+  userId?: string;
 };
 
 type FormErrors = Record<string, string>;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export default function UserCreatePage({ user }: UserCreatePageProps) {
+export default function UserFormPage({
+  user,
+  mode,
+  userId,
+}: UserFormPageProps) {
+  const isEdit = mode === "edit";
   const canWrite = user.permissions.includes("users.write");
 
   const [name, setName] = useState("");
@@ -22,48 +37,74 @@ export default function UserCreatePage({ user }: UserCreatePageProps) {
   const [roleSlugs, setRoleSlugs] = useState<string[]>([]);
   const [isActive, setIsActive] = useState(true);
   const [roles, setRoles] = useState<Role[]>([]);
-  const [isLoadingRoles, setIsLoadingRoles] = useState(true);
-  const [rolesError, setRolesError] = useState<string | null>(null);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!canWrite) {
-      setIsLoadingRoles(false);
+      setIsLoadingData(false);
+      return;
+    }
+
+    if (isEdit && !userId) {
+      setLoadError("Usuário não informado.");
+      setIsLoadingData(false);
       return;
     }
 
     let isActiveRequest = true;
-    setIsLoadingRoles(true);
-    setRolesError(null);
+    setIsLoadingData(true);
+    setLoadError(null);
 
-    fetchRoles()
-      .then((data) => {
-        if (isActiveRequest) {
-          setRoles(data);
+    const userRequest =
+      isEdit && userId ? fetchUser(userId) : Promise.resolve(null);
+
+    Promise.all([fetchRoles(), userRequest])
+      .then(([rolesData, managedUser]) => {
+        if (!isActiveRequest) {
+          return;
+        }
+
+        setRoles(rolesData);
+
+        if (managedUser) {
+          setName(managedUser.name);
+          setEmail(managedUser.email);
+          setRoleSlugs(managedUser.roles.map((role) => role.slug));
+          setIsActive(managedUser.isActive);
+          setPassword("");
+          setConfirmPassword("");
+        } else {
+          setName("");
+          setEmail("");
+          setRoleSlugs([]);
+          setIsActive(true);
+          setPassword("");
+          setConfirmPassword("");
         }
       })
-      .catch((loadError) => {
+      .catch((error) => {
         if (isActiveRequest) {
-          setRoles([]);
-          setRolesError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Não foi possível carregar os papéis.",
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : "Não foi possível carregar os dados do usuário.",
           );
         }
       })
       .finally(() => {
         if (isActiveRequest) {
-          setIsLoadingRoles(false);
+          setIsLoadingData(false);
         }
       });
 
     return () => {
       isActiveRequest = false;
     };
-  }, [canWrite]);
+  }, [canWrite, isEdit, userId]);
 
   function clearError(field: string) {
     setErrors((current) => {
@@ -89,13 +130,15 @@ export default function UserCreatePage({ user }: UserCreatePageProps) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (isSubmitting || isLoadingRoles) {
+    if (isSubmitting || isLoadingData || loadError) {
       return;
     }
 
     const nextErrors: FormErrors = {};
     const normalizedName = name.trim();
     const normalizedEmail = email.trim().toLowerCase();
+    const shouldValidatePassword =
+      !isEdit || password.length > 0 || confirmPassword.length > 0;
 
     if (normalizedName.length < 3 || normalizedName.length > 120) {
       nextErrors.name = "Informe um nome entre 3 e 120 caracteres.";
@@ -105,12 +148,14 @@ export default function UserCreatePage({ user }: UserCreatePageProps) {
       nextErrors.email = "Informe um e-mail válido.";
     }
 
-    if (password.length < 8 || password.length > 128) {
-      nextErrors.password = "A senha deve ter entre 8 e 128 caracteres.";
-    }
+    if (shouldValidatePassword) {
+      if (password.length < 8 || password.length > 128) {
+        nextErrors.password = "A senha deve ter entre 8 e 128 caracteres.";
+      }
 
-    if (confirmPassword !== password) {
-      nextErrors.confirmPassword = "As senhas não conferem.";
+      if (confirmPassword !== password) {
+        nextErrors.confirmPassword = "As senhas não conferem.";
+      }
     }
 
     if (roleSlugs.length === 0) {
@@ -127,14 +172,26 @@ export default function UserCreatePage({ user }: UserCreatePageProps) {
     setIsSubmitting(true);
 
     try {
-      await createManagedUser({
-        name: normalizedName,
-        email: normalizedEmail,
-        password,
-        roleSlugs,
-        isActive,
-      });
-      setFlash("Usuário criado com sucesso.");
+      if (isEdit && userId) {
+        await updateManagedUser(userId, {
+          name: normalizedName,
+          email: normalizedEmail,
+          roleSlugs,
+          isActive,
+          ...(shouldValidatePassword ? { password } : {}),
+        });
+        setFlash("Usuário atualizado com sucesso.");
+      } else {
+        await createManagedUser({
+          name: normalizedName,
+          email: normalizedEmail,
+          password,
+          roleSlugs,
+          isActive,
+        });
+        setFlash("Usuário criado com sucesso.");
+      }
+
       navigate("/usuarios");
     } catch (error) {
       if (error instanceof ApiError && error.code === "email_in_use") {
@@ -143,7 +200,7 @@ export default function UserCreatePage({ user }: UserCreatePageProps) {
         setSubmitError(
           error instanceof Error
             ? error.message
-            : "Não foi possível criar o usuário.",
+            : "Não foi possível salvar o usuário.",
         );
       }
     } finally {
@@ -155,10 +212,43 @@ export default function UserCreatePage({ user }: UserCreatePageProps) {
     return (
       <div className="user-form-page">
         <div className="users-error" role="alert">
-          Você não tem permissão para criar usuários.
+          Você não tem permissão para gerenciar usuários.
           <div>
             <Link className="back-link" to="/usuarios">
               ← Voltar para usuários
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoadingData) {
+    return (
+      <div className="user-form-page">
+        <Link className="back-link" to="/usuarios">
+          ← Voltar para usuários
+        </Link>
+        <section className="user-form-card">
+          <div className="users-state" role="status">
+            <strong>Carregando dados do usuário...</strong>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="user-form-page">
+        <Link className="back-link" to="/usuarios">
+          ← Voltar para usuários
+        </Link>
+        <div className="users-error" role="alert">
+          {loadError}
+          <div>
+            <Link className="back-link" to="/usuarios">
+              ← Voltar para a lista
             </Link>
           </div>
         </div>
@@ -174,9 +264,13 @@ export default function UserCreatePage({ user }: UserCreatePageProps) {
 
       <section className="user-form-card" aria-labelledby="user-form-title">
         <header className="user-form-card__header">
-          <h2 id="user-form-title">Dados do usuário</h2>
+          <h2 id="user-form-title">
+            {isEdit ? "Editar usuário" : "Dados do usuário"}
+          </h2>
           <p>
-            Cadastre o acesso, defina os papéis e informe a senha inicial.
+            {isEdit
+              ? "Atualize os dados de acesso, os papéis e a situação do usuário."
+              : "Cadastre o acesso, defina os papéis e informe a senha inicial."}
           </p>
         </header>
 
@@ -232,13 +326,17 @@ export default function UserCreatePage({ user }: UserCreatePageProps) {
           </div>
 
           <div className="form-field">
-            <label htmlFor="user-password">Senha inicial</label>
+            <label htmlFor="user-password">
+              {isEdit ? "Nova senha (opcional)" : "Senha inicial"}
+            </label>
             <input
               id="user-password"
               name="password"
               type="password"
               autoComplete="new-password"
-              placeholder="Mínimo de 8 caracteres"
+              placeholder={
+                isEdit ? "Deixe em branco para manter" : "Mínimo de 8 caracteres"
+              }
               value={password}
               aria-invalid={Boolean(errors.password)}
               onChange={(event) => {
@@ -247,7 +345,9 @@ export default function UserCreatePage({ user }: UserCreatePageProps) {
               }}
             />
             <p className="form-hint">
-              Use uma senha forte e compartilhe apenas com o usuário.
+              {isEdit
+                ? "Preencha apenas se quiser redefinir a senha."
+                : "Use uma senha forte e compartilhe apenas com o usuário."}
             </p>
             {errors.password ? (
               <p className="form-error" role="alert">
@@ -257,13 +357,17 @@ export default function UserCreatePage({ user }: UserCreatePageProps) {
           </div>
 
           <div className="form-field">
-            <label htmlFor="user-confirm-password">Confirmar senha</label>
+            <label htmlFor="user-confirm-password">
+              {isEdit ? "Confirmar nova senha" : "Confirmar senha"}
+            </label>
             <input
               id="user-confirm-password"
               name="confirmPassword"
               type="password"
               autoComplete="new-password"
-              placeholder="Repita a senha inicial"
+              placeholder={
+                isEdit ? "Repita a nova senha" : "Repita a senha inicial"
+              }
               value={confirmPassword}
               aria-invalid={Boolean(errors.confirmPassword)}
               onChange={(event) => {
@@ -288,14 +392,6 @@ export default function UserCreatePage({ user }: UserCreatePageProps) {
           <div className="form-field form-field--full">
             <fieldset>
               <legend>Papéis</legend>
-              {isLoadingRoles ? (
-                <p className="form-hint">Carregando papéis...</p>
-              ) : null}
-              {rolesError ? (
-                <p className="form-error" role="alert">
-                  {rolesError}
-                </p>
-              ) : null}
               <div className="role-options">
                 {roles.map((role) => (
                   <label className="role-option" key={role.id}>
@@ -344,9 +440,15 @@ export default function UserCreatePage({ user }: UserCreatePageProps) {
             <button
               className="button button--primary"
               type="submit"
-              disabled={isSubmitting || isLoadingRoles || Boolean(rolesError)}
+              disabled={isSubmitting}
             >
-              {isSubmitting ? "Criando..." : "Criar usuário"}
+              {isSubmitting
+                ? isEdit
+                  ? "Salvando..."
+                  : "Criando..."
+                : isEdit
+                  ? "Salvar alterações"
+                  : "Criar usuário"}
             </button>
           </div>
         </form>

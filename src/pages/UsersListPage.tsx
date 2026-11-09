@@ -24,6 +24,25 @@ function SearchIcon() {
   );
 }
 
+function PencilIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+      <path
+        d="m3.2 12.8.7-2.9L10.6 3.2a1.1 1.1 0 0 1 1.6 0l.6.6a1.1 1.1 0 0 1 0 1.6l-6.7 6.7-2.9.7Z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+      <path
+        d="m9.7 4.1 2.2 2.2"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export default function UsersListPage({ user }: UsersListPageProps) {
   const canRead = user.permissions.includes("users.read");
   const canWrite = user.permissions.includes("users.write");
@@ -293,6 +312,11 @@ export default function UsersListPage({ user }: UsersListPageProps) {
                   <th scope="col">Papel</th>
                   <th scope="col">Situação</th>
                   <th scope="col">Criado em</th>
+                  {canWrite ? (
+                    <th scope="col" className="users-table__actions">
+                      Ações
+                    </th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
@@ -330,6 +354,18 @@ export default function UsersListPage({ user }: UsersListPageProps) {
                       </span>
                     </td>
                     <td>{formatDate(managedUser.createdAt)}</td>
+                    {canWrite ? (
+                      <td className="users-table__actions">
+                        <Link
+                          className="user-edit-button"
+                          to={`/usuarios/${managedUser.id}/editar`}
+                          aria-label={`Editar ${managedUser.name}`}
+                        >
+                          <PencilIcon />
+                          <span>Editar</span>
+                        </Link>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>

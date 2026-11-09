@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import AppShell from "./components/AppShell";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
-import UserCreatePage from "./pages/UserCreatePage";
+import UserFormPage from "./pages/UserFormPage";
 import UsersListPage from "./pages/UsersListPage";
 import { fetchCurrentUser, logout } from "./lib/api";
 import { navigate, usePathname } from "./lib/navigation";
@@ -88,7 +88,30 @@ export default function App() {
         isLoggingOut={isLoggingOut}
         onLogout={handleLogout}
       >
-        <UserCreatePage user={user} />
+        <UserFormPage key="create" user={user} mode="create" />
+      </AppShell>
+    );
+  }
+
+  const editUserMatch = pathname.match(/^\/usuarios\/([^/]+)\/editar$/);
+
+  if (editUserMatch) {
+    const userId = editUserMatch[1];
+
+    return (
+      <AppShell
+        user={user}
+        title="Editar usuário"
+        activeNav="usuarios"
+        isLoggingOut={isLoggingOut}
+        onLogout={handleLogout}
+      >
+        <UserFormPage
+          key={`edit-${userId}`}
+          user={user}
+          mode="edit"
+          userId={userId}
+        />
       </AppShell>
     );
   }

@@ -550,6 +550,163 @@ export async function openDatabase({
     },
 
     /**
+     * Atualiza os dados administrativos de um usuário.
+     * A senha é opcional; quando informada, é armazenada apenas como hash.
+     *
+     * @param {string} id
+     * @param {{
+     *   name: string,
+     *   email: string,
+     *   password?: string,
+     *   roleSlugs?: string[],
+     *   isActive?: boolean,
+     * }} input
+     */
+    async updateUser(
+      id,
+      { name, email, password, roleSlugs = [], isActive = true },
+    ) {
+      const existing = selectUserById.get(id);
+
+      if (!existing) {
+        const error = new Error("Usuário não encontrado.");
+        error.code = "USER_NOT_FOUND";
+        throw error;
+      }
+
+      const normalizedName = String(name ?? "").trim();
+      const normalizedEmail = normalizeEmail(email);
+
+      if (!normalizedName) {
+        const error = new Error("Nome do usuário é obrigatório.");
+        error.code = "INVALID_NAME";
+        throw error;
+      }
+
+      if (!normalizedEmail) {
+        const error = new Error("E-mail do usuário é obrigatório.");
+        error.code = "INVALID_EMAIL";
+        throw error;
+      }
+
+      const emailOwner = selectUserByEmail.get(normalizedEmail);
+
+      if (emailOwner && emailOwner.id !== id) {
+        const error = new Error("Já existe um usuário com este e-mail.");
+        error.code = "EMAIL_IN_USE";
+        throw error;
+      }
+
+      if (!Array.isArray(roleSlugs) || roleSlugs.length === 0) {
+        const error = new Error("Selecione ao menos um papel.");
+        error.code = "ROLE_REQUIRED";
+        throw error;
+      }
+
+      const uniqueRoleSlugs = [...new Set(roleSlugs)];
+      const roleIds = uniqueRoleSlugs.map((slug) => {
+        const role = selectRoleBySlug.get(slug);
+
+        if (!role) {
+          const error = new Error(`Papel desconhecido: ${slug}`);
+          error.code = "UNKNOWN_ROLE";
+          throw error;
+        }
+
+        return role.id;
+      });
+
+      const passwordHash =
+        typeof password === "string" && password.length > 0
+          ? await hashPassword(password)
+          : null;
+      const targetWillBeAdmin =
+        uniqueRoleSlugs.includes("administrador") && isActive;
+      const deleteUserRoles = connection.prepare(
+        "DELETE FROM user_roles WHERE user_id = ?",
+      );
+      const selectCurrentAdmin = connection.prepare(
+        `SELECT 1
+         FROM user_roles ur
+         INNER JOIN roles r ON r.id = ur.role_id
+         WHERE ur.user_id = ? AND r.slug = 'administrador'`,
+      );
+      const countActiveAdmins = connection.prepare(
+        `SELECT COUNT(DISTINCT u.id) AS total
+         FROM users u
+         INNER JOIN user_roles ur ON ur.user_id = u.id
+         INNER JOIN roles r ON r.id = ur.role_id
+         WHERE u.is_active = 1 AND r.slug = 'administrador'`,
+      );
+
+      connection.exec("BEGIN IMMEDIATE;");
+
+      try {
+        const isCurrentlyAdmin = Boolean(selectCurrentAdmin.get(id));
+        const activeAdmins = countActiveAdmins.get().total;
+
+        if (
+          existing.is_active &&
+          isCurrentlyAdmin &&
+          !targetWillBeAdmin &&
+          activeAdmins <= 1
+        ) {
+          const error = new Error(
+            "Não é possível remover ou desativar o último administrador ativo.",
+          );
+          error.code = "LAST_ADMIN";
+          throw error;
+        }
+
+        const timestamp = nowIso();
+
+        if (passwordHash) {
+          connection
+            .prepare(
+              `UPDATE users
+               SET name = ?, email = ?, password_hash = ?, is_active = ?, updated_at = ?
+               WHERE id = ?`,
+            )
+            .run(
+              normalizedName,
+              normalizedEmail,
+              passwordHash,
+              isActive ? 1 : 0,
+              timestamp,
+              id,
+            );
+        } else {
+          connection
+            .prepare(
+              `UPDATE users
+               SET name = ?, email = ?, is_active = ?, updated_at = ?
+               WHERE id = ?`,
+            )
+            .run(
+              normalizedName,
+              normalizedEmail,
+              isActive ? 1 : 0,
+              timestamp,
+              id,
+            );
+        }
+
+        deleteUserRoles.run(id);
+
+        for (const roleId of roleIds) {
+          insertUserRole.run(id, roleId);
+        }
+
+        connection.exec("COMMIT;");
+      } catch (error) {
+        connection.exec("ROLLBACK;");
+        throw error;
+      }
+
+      return database.getUserAuthById(id);
+    },
+
+    /**
      * @param {{
      *   userId: string,
      *   tokenHash: string,
