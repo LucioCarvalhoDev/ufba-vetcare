@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import DashboardPage from "./pages/DashboardPage";
+import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import { fetchCurrentUser, logout } from "./lib/api";
 import type { AuthUser } from "./types/auth";
@@ -57,7 +57,7 @@ export default function App() {
 
   if (user) {
     return (
-      <DashboardPage
+      <HomePage
         user={user}
         isLoggingOut={isLoggingOut}
         onLogout={handleLogout}
