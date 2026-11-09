@@ -191,3 +191,28 @@ test("cadastra animais vinculados, atualiza e respeita integridade", () => {
     (error) => error.code === "ANIMAL_NOT_FOUND",
   );
 });
+
+test("migrations são versionadas e idempotentes", async () => {
+  const filename = join(tempDir, "migrations.db");
+  const options = {
+    filename,
+    adminEmail: "admin@vetcare.com",
+    adminName: "Administrador de Teste",
+    adminPassword: "SenhaAdmin123!",
+  };
+  const first = await openDatabase(options);
+  const firstVersion = first.connection
+    .prepare("PRAGMA user_version")
+    .get().user_version;
+
+  assert.ok(firstVersion >= 2);
+  first.close();
+
+  const second = await openDatabase(options);
+  const secondVersion = second.connection
+    .prepare("PRAGMA user_version")
+    .get().user_version;
+
+  assert.equal(secondVersion, firstVersion);
+  second.close();
+});
