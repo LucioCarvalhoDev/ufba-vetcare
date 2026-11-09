@@ -1,10 +1,15 @@
 import { useEffect, useState } from "react";
+import AppShell from "./components/AppShell";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
+import UserCreatePage from "./pages/UserCreatePage";
+import UsersListPage from "./pages/UsersListPage";
 import { fetchCurrentUser, logout } from "./lib/api";
+import { navigate, usePathname } from "./lib/navigation";
 import type { AuthUser } from "./types/auth";
 
 export default function App() {
+  const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isRestoringSession, setIsRestoringSession] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -44,6 +49,7 @@ export default function App() {
     } finally {
       setUser(null);
       setIsLoggingOut(false);
+      navigate("/");
     }
   }
 
@@ -55,15 +61,47 @@ export default function App() {
     );
   }
 
-  if (user) {
+  if (!user) {
+    return <LoginPage onAuthenticated={setUser} />;
+  }
+
+  if (pathname === "/usuarios") {
     return (
-      <HomePage
+      <AppShell
         user={user}
+        title="Usuários"
+        activeNav="usuarios"
         isLoggingOut={isLoggingOut}
         onLogout={handleLogout}
-      />
+      >
+        <UsersListPage user={user} />
+      </AppShell>
     );
   }
 
-  return <LoginPage onAuthenticated={setUser} />;
+  if (pathname === "/usuarios/novo") {
+    return (
+      <AppShell
+        user={user}
+        title="Novo usuário"
+        activeNav="usuarios"
+        isLoggingOut={isLoggingOut}
+        onLogout={handleLogout}
+      >
+        <UserCreatePage user={user} />
+      </AppShell>
+    );
+  }
+
+  return (
+    <AppShell
+      user={user}
+      title="Início"
+      activeNav="inicio"
+      isLoggingOut={isLoggingOut}
+      onLogout={handleLogout}
+    >
+      <HomePage />
+    </AppShell>
+  );
 }

@@ -83,6 +83,10 @@ function normalizeEmail(email) {
   return String(email ?? "").trim().toLowerCase();
 }
 
+function escapeLike(value) {
+  return String(value).replace(/[\\%_]/g, "\\$&");
+}
+
 /**
  * Sincroniza o catálogo de permissões e papéis definido no código.
  *
@@ -389,7 +393,82 @@ export async function openDatabase({
     },
 
     /**
-     * Cria usuários para testes e para futuras telas administrativas.
+     * Lista usuários com filtros opcionais de nome/e-mail, papel e situação.
+     *
+     * @param {{
+     *   q?: string,
+     *   roleSlug?: string,
+     *   isActive?: boolean,
+     * }} [filters]
+     */
+    listUsers({ q = "", roleSlug = "", isActive } = {}) {
+      const conditions = [];
+      const parameters = [];
+      const search = String(q ?? "").trim();
+
+      if (search) {
+        const term = `%${escapeLike(search)}%`;
+        conditions.push(
+          "(u.name LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\')",
+        );
+        parameters.push(term, term);
+      }
+
+      if (roleSlug) {
+        conditions.push(
+          `EXISTS (
+             SELECT 1
+             FROM user_roles ur
+             INNER JOIN roles r ON r.id = ur.role_id
+             WHERE ur.user_id = u.id AND r.slug = ?
+           )`,
+        );
+        parameters.push(roleSlug);
+      }
+
+      if (typeof isActive === "boolean") {
+        conditions.push("u.is_active = ?");
+        parameters.push(isActive ? 1 : 0);
+      }
+
+      const where = conditions.length
+        ? `WHERE ${conditions.join(" AND ")}`
+        : "";
+      const rows = connection
+        .prepare(
+          `SELECT u.*
+           FROM users u
+           ${where}
+           ORDER BY u.name COLLATE NOCASE ASC, u.created_at ASC`,
+        )
+        .all(...parameters);
+
+      return rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        isActive: Boolean(row.is_active),
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        roles: getUserRoles(connection, row.id),
+      }));
+    },
+
+    /**
+     * Lista papéis disponíveis para filtros e formulários administrativos.
+     */
+    listRoles() {
+      return connection
+        .prepare(
+          `SELECT id, slug, name, description
+           FROM roles
+           ORDER BY name COLLATE NOCASE ASC`,
+        )
+        .all();
+    },
+
+    /**
+     * Cria usuários para a área administrativa.
      * A autorização de quem chama deve ser verificada na camada de aplicação.
      *
      * @param {{
@@ -407,20 +486,39 @@ export async function openDatabase({
       roleSlugs = [],
       isActive = true,
     }) {
+      const normalizedName = String(name ?? "").trim();
       const normalizedEmail = normalizeEmail(email);
 
-      if (!String(name ?? "").trim()) {
-        throw new Error("Nome do usuário é obrigatório.");
+      if (!normalizedName) {
+        const error = new Error("Nome do usuário é obrigatório.");
+        error.code = "INVALID_NAME";
+        throw error;
       }
 
       if (!normalizedEmail) {
-        throw new Error("E-mail do usuário é obrigatório.");
+        const error = new Error("E-mail do usuário é obrigatório.");
+        error.code = "INVALID_EMAIL";
+        throw error;
       }
 
-      const roleIds = roleSlugs.map((slug) => {
+      if (selectUserByEmail.get(normalizedEmail)) {
+        const error = new Error("Já existe um usuário com este e-mail.");
+        error.code = "EMAIL_IN_USE";
+        throw error;
+      }
+
+      if (!Array.isArray(roleSlugs) || roleSlugs.length === 0) {
+        const error = new Error("Selecione ao menos um papel.");
+        error.code = "ROLE_REQUIRED";
+        throw error;
+      }
+
+      const roleIds = [...new Set(roleSlugs)].map((slug) => {
         const role = selectRoleBySlug.get(slug);
         if (!role) {
-          throw new Error(`Papel desconhecido: ${slug}`);
+          const error = new Error(`Papel desconhecido: ${slug}`);
+          error.code = "UNKNOWN_ROLE";
+          throw error;
         }
         return role.id;
       });
@@ -436,7 +534,7 @@ export async function openDatabase({
         )
         .run(
           userId,
-          String(name).trim(),
+          normalizedName,
           normalizedEmail,
           passwordHash,
           isActive ? 1 : 0,

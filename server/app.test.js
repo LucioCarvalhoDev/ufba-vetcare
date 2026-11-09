@@ -220,3 +220,212 @@ test("sessão expirada é rejeitada e removida", async () => {
 
   assert.equal(remaining.total, 0);
 });
+
+test("API de usuários exige autenticação e permissão", async () => {
+  const anonymous = await fetch(`${baseUrl}/api/users`);
+  assert.equal(anonymous.status, 401);
+
+  const receptionistLogin = await loginRequest(
+    "recepcao@vetcare.com",
+    "SenhaRecepcao123!",
+  );
+  assert.equal(receptionistLogin.status, 200);
+  const receptionistCookie = sessionCookie(receptionistLogin);
+
+  const forbidden = await fetch(`${baseUrl}/api/users`, {
+    headers: { cookie: receptionistCookie },
+  });
+  assert.equal(forbidden.status, 403);
+
+  const forbiddenCreate = await fetch(`${baseUrl}/api/users`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: receptionistCookie,
+    },
+    body: JSON.stringify({
+      name: "Sem Permissão",
+      email: "sem-permissao@vetcare.com",
+      password: "SenhaSemPermissao123!",
+      roleSlugs: ["recepcionista"],
+      isActive: true,
+    }),
+  });
+  assert.equal(forbiddenCreate.status, 403);
+
+  const adminLogin = await loginRequest(TEST_EMAIL, TEST_PASSWORD);
+  assert.equal(adminLogin.status, 200);
+  const adminCookie = sessionCookie(adminLogin);
+
+  const response = await fetch(`${baseUrl}/api/users`, {
+    headers: { cookie: adminCookie },
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.ok(Array.isArray(body.users));
+  assert.ok(body.users.length >= 4);
+  assert.equal("passwordHash" in body.users[0], false);
+
+  const rolesResponse = await fetch(`${baseUrl}/api/roles`, {
+    headers: { cookie: adminCookie },
+  });
+  const rolesBody = await rolesResponse.json();
+
+  assert.equal(rolesResponse.status, 200);
+  assert.equal(rolesBody.roles.length, 3);
+
+  const forbiddenRoles = await fetch(`${baseUrl}/api/roles`, {
+    headers: { cookie: receptionistCookie },
+  });
+  assert.equal(forbiddenRoles.status, 403);
+});
+
+test("cria usuário com papéis, valida duplicidade e registra auditoria", async () => {
+  const adminLogin = await loginRequest(TEST_EMAIL, TEST_PASSWORD);
+  const cookie = sessionCookie(adminLogin);
+
+  const response = await fetch(`${baseUrl}/api/users`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie,
+    },
+    body: JSON.stringify({
+      name: "Maria Souza",
+      email: "maria@vetcare.com",
+      password: "SenhaMaria123!",
+      roleSlugs: ["recepcionista"],
+      isActive: true,
+    }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 201);
+  assert.equal(body.user.name, "Maria Souza");
+  assert.equal(body.user.email, "maria@vetcare.com");
+  assert.equal(body.user.isActive, true);
+  assert.equal(body.user.roles[0].slug, "recepcionista");
+  assert.equal("passwordHash" in body.user, false);
+
+  const stored = database.getUserAuthByEmail("maria@vetcare.com");
+  assert.ok(stored);
+  assert.match(stored.passwordHash, /^scrypt\$/);
+  assert.notEqual(stored.passwordHash, "SenhaMaria123!");
+
+  const audit = database.connection
+    .prepare(
+      `SELECT action, result, resource
+       FROM audit_logs
+       WHERE action = 'users.create' AND resource = ?
+       ORDER BY created_at DESC LIMIT 1`,
+    )
+    .get(body.user.id);
+
+  assert.equal(audit?.result, "success");
+  assert.equal(audit?.resource, body.user.id);
+
+  const duplicate = await fetch(`${baseUrl}/api/users`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie,
+    },
+    body: JSON.stringify({
+      name: "Maria Duplicada",
+      email: "MARIA@VETCARE.COM",
+      password: "SenhaMaria123!",
+      roleSlugs: ["recepcionista"],
+      isActive: true,
+    }),
+  });
+  const duplicateBody = await duplicate.json();
+
+  assert.equal(duplicate.status, 409);
+  assert.equal(duplicateBody.error.code, "email_in_use");
+
+  const invalidRole = await fetch(`${baseUrl}/api/users`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie,
+    },
+    body: JSON.stringify({
+      name: "Papel Inválido",
+      email: "papel-invalido@vetcare.com",
+      password: "SenhaInvalida123!",
+      roleSlugs: ["papel-inexistente"],
+      isActive: true,
+    }),
+  });
+
+  assert.equal(invalidRole.status, 400);
+
+  const invalidPassword = await fetch(`${baseUrl}/api/users`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie,
+    },
+    body: JSON.stringify({
+      name: "Senha Curta",
+      email: "senha-curta@vetcare.com",
+      password: "123",
+      roleSlugs: ["recepcionista"],
+      isActive: true,
+    }),
+  });
+  const invalidPasswordBody = await invalidPassword.json();
+
+  assert.equal(invalidPassword.status, 400);
+  assert.equal(invalidPasswordBody.error.code, "invalid_password");
+});
+
+test("filtra usuários por nome/e-mail, papel e situação", async () => {
+  const adminLogin = await loginRequest(TEST_EMAIL, TEST_PASSWORD);
+  const cookie = sessionCookie(adminLogin);
+
+  async function listUsers(query) {
+    const response = await fetch(`${baseUrl}/api/users?${query}`, {
+      headers: { cookie },
+    });
+    const body = await response.json();
+    return { response, body };
+  }
+
+  const byName = await listUsers("q=maria");
+  assert.equal(byName.response.status, 200);
+  assert.ok(byName.body.users.length >= 1);
+  assert.ok(
+    byName.body.users.every((user) =>
+      `${user.name} ${user.email}`.toLowerCase().includes("maria"),
+    ),
+  );
+
+  const byEmail = await listUsers(
+    `q=${encodeURIComponent("INATIVO@VETCARE.COM")}`,
+  );
+  assert.ok(byEmail.body.users.some((user) => user.email === "inativo@vetcare.com"));
+
+  const byRole = await listUsers("role=recepcionista");
+  assert.ok(byRole.body.users.length >= 2);
+  assert.ok(
+    byRole.body.users.every((user) =>
+      user.roles.some((role) => role.slug === "recepcionista"),
+    ),
+  );
+
+  const byStatus = await listUsers("status=inactive");
+  assert.ok(byStatus.body.users.length >= 1);
+  assert.ok(byStatus.body.users.every((user) => user.isActive === false));
+
+  const combined = await listUsers(
+    "role=administrador&status=active&q=administrador",
+  );
+  assert.ok(
+    combined.body.users.some((user) => user.email === TEST_EMAIL),
+  );
+
+  const invalidStatus = await listUsers("status=desconhecido");
+  assert.equal(invalidStatus.response.status, 400);
+});

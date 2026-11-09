@@ -2,7 +2,13 @@ import type {
   AuthResponse,
   AuthUser,
   LoginCredentials,
+  Role,
 } from "../types/auth";
+import type {
+  CreateUserInput,
+  ManagedUser,
+  UserFilters,
+} from "../types/users";
 
 type ApiErrorPayload = {
   error?: {
@@ -84,4 +90,47 @@ export async function fetchCurrentUser(): Promise<AuthUser> {
 
 export async function logout(): Promise<void> {
   await request<void>("/auth/logout", { method: "POST" });
+}
+
+export async function fetchUsers(filters: UserFilters = {}): Promise<ManagedUser[]> {
+  const params = new URLSearchParams();
+
+  if (filters.q) {
+    params.set("q", filters.q);
+  }
+
+  if (filters.role) {
+    params.set("role", filters.role);
+  }
+
+  if (filters.status) {
+    params.set("status", filters.status);
+  }
+
+  const query = params.toString();
+  const response = await request<{ users: ManagedUser[]; total: number }>(
+    `/users${query ? `?${query}` : ""}`,
+    { method: "GET" },
+  );
+
+  return response.users;
+}
+
+export async function fetchRoles(): Promise<Role[]> {
+  const response = await request<{ roles: Role[] }>("/roles", {
+    method: "GET",
+  });
+
+  return response.roles;
+}
+
+export async function createManagedUser(
+  input: CreateUserInput,
+): Promise<ManagedUser> {
+  const response = await request<{ user: ManagedUser }>("/users", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
+  return response.user;
 }

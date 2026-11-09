@@ -120,6 +120,14 @@
   font-weight: 600;
 }
 
+.sidebar__nav-item.is-placeholder {
+  cursor: default;
+}
+
+.sidebar__nav-item.is-placeholder:hover {
+  background: transparent;
+}
+
 .sidebar__nav-icon {
   display: grid;
   flex: 0 0 auto;
