@@ -108,6 +108,42 @@ Abaixo estão listados os componentes do sistema, suas responsabilidades e as ca
 
 ---
 
+## Protótipo do Sistema
+
+Nesta seção, estão disponíveis as interfaces visuais do VetCare, desenvolvidas para validar a usabilidade e a experiência do usuário antes da implementação final. O protótipo navegável pode ser acessado através do link abaixo.
+
+**[Link para o Protótipo Navegável (Figma)](https://www.figma.com/design/RyttkdA9VockglJyTNJYqA/Sem-t%25C3%25ADtulo?node-id=1-3&t=sLbbEYodTy7TzK69-0)**
+
+### Tela de Login
+Interface de autenticação de usuários, contendo campos para e-mail/usuário e senha, além de opção de recuperação de senha.
+*(Substitua a imagem abaixo pelo print da tela de login)*
+![Tela de Login]([https://via.placeholder.com/800x450?text=Print+da+Tela+de+Login](https://www.figma.com/design/RyttkdA9VockglJyTNJYqA/Sem-t%C3%ADtulo?node-id=1-2&t=sLbbEYodTy7TzK69-1))
+
+### Tela de Cadastro de Usuário
+Interface para inclusão de novos usuários no sistema, contendo campos como nome, e-mail, perfil de acesso (Administrador, Recepcionista, Veterinário) e senha.
+*(Incluir a imagem abaixo pelo print da tela de cadastro)*
+![Tela de Cadastro de Usuário](https://via.placeholder.com/800x450?text=Print+da+Tela+de+Cadastro)
+
+> **Nota:** Outras telas do sistema (Agenda, Prontuário, Financeiro) podem ser adicionadas nesta seção conforme o avanço do projeto.
+
+---
+
+## Documentação e Artefatos Externos
+
+Para centralizar e facilitar o acesso a todos os artefatos produzidos durante o desenvolvimento do projeto, os documentos complementares estão organizados na tabela abaixo:
+
+| Artefato | Descrição | Link de Acesso |
+| :--- | :--- | :--- |
+| **Documentação de Requisitos** | Documento completo com os requisitos funcionais e não funcionais do VetCare. | [Acessar Google Docs](https://docs.google.com/document/d/1Q5mlRNlOBcRVlrh8S1Xe0NLVUcPYFrlbgivGcqV6Myo/edit?tab=t.vslsqmnwl6d2) |
+| **Diagrama de Pacotes (UML)** | Diagrama visual da arquitetura de pacotes e dependências do sistema. | [Acessar Diagrama](https://docs.google.com/document/d/1Q5mlRNlOBcRVlrh8S1Xe0NLVUcPYFrlbgivGcqV6Myo/edit?tab=t.ubqouu4r2w0l) |
+| **Diagrama de Classes (UML)** | Modelagem das entidades e relacionamentos do domínio do sistema. | [Acessar Diagrama](https://link-do-diagrama-aqui.com) |
+| **Diagrama de Sequência (UML)** | Representação das interações entre os componentes para fluxos críticos. | [Acessar Diagrama](https://link-do-diagrama-aqui.com) |
+| **Protótipo Navegável** | Link direto para o protótipo interativo no Figma. | [Acessar Protótipo](https://link-do-prototipo-aqui.com) |
+
+> **Instruções:** Colocar os links de exemplo acima pelos URLs reais dos documentos da equipe.
+
+---
+
 ## Tecnologias Sugeridas
 
 ### Contexto Acadêmico
