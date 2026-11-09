@@ -57,4 +57,18 @@ export type VeterinarianAvailabilityFilter = {
   weekday: number;
   startMinutes: number;
   durationMinutes: number;
+  date?: string;
+};
+
+export type ScheduleStatus = "free" | "busy" | "closed";
+
+export type ScheduleDay = {
+  date: string;
+  weekday: number;
+  slots: ScheduleStatus[];
+};
+
+export type ScheduleWeek = {
+  from: string;
+  days: ScheduleDay[];
 };

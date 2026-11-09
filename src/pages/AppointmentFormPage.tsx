@@ -1,10 +1,12 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import ScheduleGrid from "../components/ScheduleGrid";
 import { SearchIcon } from "../components/icons";
 import {
   ApiError,
   createAppointment,
   fetchAnimals,
   fetchAppointment,
+  fetchSchedule,
   fetchVeterinarians,
   updateAppointment,
 } from "../lib/api";
@@ -21,6 +23,7 @@ import type { AuthUser } from "../types/auth";
 import type {
   AppointmentStatus,
   AppointmentType,
+  ScheduleWeek,
   Veterinarian,
   VeterinarianAvailabilityFilter,
 } from "../types/appointments";
@@ -47,6 +50,40 @@ const STATUSES: { value: AppointmentStatus; label: string }[] = [
   { value: "cancelled", label: "Cancelada" },
 ];
 
+function localDateKey(date: Date) {
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function parseDateKey(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function startOfWeekKey(date: Date) {
+  const day = date.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  return localDateKey(
+    new Date(date.getFullYear(), date.getMonth(), date.getDate() + mondayOffset),
+  );
+}
+
+function addDaysToKey(value: string, days: number) {
+  const date = parseDateKey(value);
+  return localDateKey(
+    new Date(date.getFullYear(), date.getMonth(), date.getDate() + days),
+  );
+}
+
+function displayDateKey(value: string) {
+  const [year, month, day] = value.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+function slotKey(date: string, startMinutes: number) {
+  return `${date}:${startMinutes}`;
+}
+
 function getAvailabilityFilter(
   scheduledAt: string,
   durationMinutes: string,
@@ -68,6 +105,7 @@ function getAvailabilityFilter(
     weekday: date.getDay() === 0 ? 7 : date.getDay(),
     startMinutes: date.getHours() * 60 + date.getMinutes(),
     durationMinutes: duration,
+    date: localDateKey(date),
   };
 }
 
@@ -96,6 +134,16 @@ export default function AppointmentFormPage({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [weekStart, setWeekStart] = useState(() => startOfWeekKey(new Date()));
+  const [schedule, setSchedule] = useState<ScheduleWeek | null>(null);
+  const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set());
+  const [isLoadingSchedule, setIsLoadingSchedule] = useState(true);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const gridDragRef = useRef<{
+    date: string;
+    anchor: number;
+  } | null>(null);
+  const suppressGridClickRef = useRef(false);
 
   useEffect(() => {
     if (!canWrite) {
@@ -203,6 +251,95 @@ export default function AppointmentFormPage({
     };
   }, [canWrite, scheduledAt, durationMinutes]);
 
+  useEffect(() => {
+    if (!canWrite) {
+      return;
+    }
+
+    let isActiveRequest = true;
+    setIsLoadingSchedule(true);
+    setScheduleError(null);
+
+    fetchSchedule(weekStart)
+      .then((data) => {
+        if (isActiveRequest) {
+          setSchedule(data);
+        }
+      })
+      .catch((error) => {
+        if (isActiveRequest) {
+          setSchedule(null);
+          setScheduleError(
+            error instanceof Error
+              ? error.message
+              : "Não foi possível carregar a agenda.",
+          );
+        }
+      })
+      .finally(() => {
+        if (isActiveRequest) {
+          setIsLoadingSchedule(false);
+        }
+      });
+
+    return () => {
+      isActiveRequest = false;
+    };
+  }, [canWrite, weekStart]);
+
+  useEffect(() => {
+    if (!scheduledAt) {
+      setSelectedSlots(new Set());
+      return;
+    }
+
+    const date = new Date(scheduledAt);
+    const duration = Number(durationMinutes);
+
+    if (
+      Number.isNaN(date.getTime()) ||
+      !Number.isInteger(duration) ||
+      duration < 15
+    ) {
+      return;
+    }
+
+    const dateKey = localDateKey(date);
+    const nextWeek = startOfWeekKey(date);
+    setWeekStart((current) => (current === nextWeek ? current : nextWeek));
+    const start = date.getHours() * 60 + date.getMinutes();
+    const count = Math.max(1, Math.min(16, Math.ceil(duration / 30)));
+
+    setSelectedSlots(
+      new Set(
+        Array.from({ length: count }, (_, index) =>
+          slotKey(dateKey, start + index * 30),
+        ),
+      ),
+    );
+  }, [scheduledAt, durationMinutes]);
+
+  useEffect(() => {
+    function endGridDrag() {
+      if (!gridDragRef.current) {
+        return;
+      }
+
+      gridDragRef.current = null;
+      window.setTimeout(() => {
+        suppressGridClickRef.current = false;
+      }, 0);
+    }
+
+    window.addEventListener("pointerup", endGridDrag);
+    window.addEventListener("pointercancel", endGridDrag);
+
+    return () => {
+      window.removeEventListener("pointerup", endGridDrag);
+      window.removeEventListener("pointercancel", endGridDrag);
+    };
+  }, []);
+
   function clearError(field: string) {
     setErrors((current) => {
       if (!current[field]) {
@@ -213,6 +350,133 @@ export default function AppointmentFormPage({
       delete next[field];
       return next;
     });
+  }
+
+  function slotStatus(date: string, startMinutes: number) {
+    const day = schedule?.days.find((item) => item.date === date);
+    return day?.slots[Math.floor(startMinutes / 30)] ?? "closed";
+  }
+
+  function applyGridSelection(date: string, first: number, last: number) {
+    const start = Math.min(first, last);
+    const end = Math.max(first, last);
+    const count = (end - start) / 30 + 1;
+
+    if (count < 1 || count > 16) {
+      return;
+    }
+
+    setSelectedSlots(
+      new Set(
+        Array.from({ length: count }, (_, index) =>
+          slotKey(date, start + index * 30),
+        ),
+      ),
+    );
+
+    const hours = String(Math.floor(start / 60)).padStart(2, "0");
+    const minutes = String(start % 60).padStart(2, "0");
+    setScheduledAt(`${date}T${hours}:${minutes}`);
+    setDurationMinutes(String(count * 30));
+    setErrors((current) => {
+      if (!current.scheduledAt && !current.durationMinutes) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next.scheduledAt;
+      delete next.durationMinutes;
+      return next;
+    });
+  }
+
+  function handleGridPointerDown(
+    date: string,
+    startMinutes: number,
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) {
+    if (event.pointerType === "touch" || slotStatus(date, startMinutes) !== "free") {
+      return;
+    }
+
+    gridDragRef.current = { date, anchor: startMinutes };
+    suppressGridClickRef.current = true;
+    applyGridSelection(date, startMinutes, startMinutes);
+  }
+
+  function handleGridPointerOver(
+    date: string,
+    startMinutes: number,
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) {
+    const drag = gridDragRef.current;
+
+    if (!drag || event.pointerType === "touch" || drag.date !== date) {
+      return;
+    }
+
+    const first = Math.min(drag.anchor, startMinutes);
+    const last = Math.max(drag.anchor, startMinutes);
+    const count = (last - first) / 30 + 1;
+
+    if (count > 16) {
+      return;
+    }
+
+    for (let minutes = first; minutes <= last; minutes += 30) {
+      if (slotStatus(date, minutes) !== "free") {
+        return;
+      }
+    }
+
+    applyGridSelection(date, first, last);
+  }
+
+  function handleGridClick(
+    date: string,
+    startMinutes: number,
+    _event: React.MouseEvent<HTMLButtonElement>,
+  ) {
+    if (suppressGridClickRef.current) {
+      suppressGridClickRef.current = false;
+      return;
+    }
+
+    if (slotStatus(date, startMinutes) !== "free") {
+      return;
+    }
+
+    const starts = [...selectedSlots]
+      .filter((key) => key.startsWith(`${date}:`))
+      .map((key) => Number(key.split(":")[1]));
+
+    if (starts.length > 0) {
+      const min = Math.min(...starts);
+      const max = Math.max(...starts);
+
+      if (startMinutes === min - 30 || startMinutes === max + 30) {
+        applyGridSelection(
+          date,
+          Math.min(min, startMinutes),
+          Math.max(max, startMinutes),
+        );
+        return;
+      }
+    }
+
+    applyGridSelection(date, startMinutes, startMinutes);
+  }
+
+  function changeWeek(days: number) {
+    setWeekStart((current) => addDaysToKey(current, days));
+    setSelectedSlots(new Set());
+    setScheduledAt("");
+  }
+
+  function goToCurrentWeek() {
+    setWeekStart(startOfWeekKey(new Date()));
+    setSelectedSlots(new Set());
+    setScheduledAt("");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -358,12 +622,29 @@ export default function AppointmentFormPage({
   const availabilityLabel = hasSchedule
     ? `Disponíveis em ${formatDate(scheduledAt)} às ${formatTime(scheduledAt)}`
     : "Selecione data e horário para filtrar automaticamente pela disponibilidade.";
+  const weekLabel = `${displayDateKey(weekStart)} – ${displayDateKey(
+    addDaysToKey(weekStart, 6),
+  )}`;
 
   return (
     <div className="user-form-page appointment-form-page">
       <Link className="back-link" to="/agenda">
         ← Voltar para a agenda
       </Link>
+
+      <ScheduleGrid
+        schedule={schedule}
+        selected={selectedSlots}
+        isLoading={isLoadingSchedule}
+        error={scheduleError}
+        weekLabel={weekLabel}
+        onPreviousWeek={() => changeWeek(-7)}
+        onNextWeek={() => changeWeek(7)}
+        onCurrentWeek={goToCurrentWeek}
+        onPointerDown={handleGridPointerDown}
+        onPointerOver={handleGridPointerOver}
+        onClick={handleGridClick}
+      />
 
       <div className="appointment-form-layout">
         <section

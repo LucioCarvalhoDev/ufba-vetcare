@@ -25,6 +25,7 @@ import type {
   Veterinarian,
   VeterinarianAvailability,
   VeterinarianAvailabilityFilter,
+  ScheduleWeek,
 } from "../types/appointments";
 
 type ApiErrorPayload = {
@@ -353,6 +354,7 @@ export async function fetchVeterinarians(
     params.set("weekday", String(filter.weekday));
     params.set("startMinutes", String(filter.startMinutes));
     params.set("durationMinutes", String(filter.durationMinutes));
+    if (filter.date) params.set("date", filter.date);
   }
 
   const query = params.toString();
@@ -384,4 +386,11 @@ export async function updateVeterinarianAvailability(
       body: JSON.stringify({ slots }),
     },
   );
+}
+
+export async function fetchSchedule(from: string): Promise<ScheduleWeek> {
+  const params = new URLSearchParams({ from });
+  return request<ScheduleWeek>(`/schedule?${params.toString()}`, {
+    method: "GET",
+  });
 }
