@@ -53,8 +53,8 @@ const TIME_SLOTS = Array.from({ length: 48 }, (_, index) => {
   return { minutes, label: `${hours}:${rest}` };
 });
 
-const STANDARD_START = 6 * 60;
-const STANDARD_END = 20 * 60;
+const STANDARD_START = 7 * 60;
+const STANDARD_END = 18 * 60;
 const STANDARD_SLOTS = TIME_SLOTS.filter(
   (slot) => slot.minutes >= STANDARD_START && slot.minutes < STANDARD_END,
 );
