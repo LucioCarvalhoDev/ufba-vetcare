@@ -11,6 +11,10 @@ export type DashboardAppointment = {
   tutorName: string;
 };
 
+export type DashboardUpcomingAppointment = DashboardAppointment & {
+  date: string;
+};
+
 export type VeterinarianDashboard = {
   date: string;
   veterinarian: {
@@ -24,6 +28,7 @@ export type VeterinarianDashboard = {
     cancelled: number;
   };
   appointments: DashboardAppointment[];
+  upcoming: DashboardUpcomingAppointment[];
   month: {
     key: string;
     days: { date: string; count: number }[];

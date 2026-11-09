@@ -51,6 +51,12 @@ function longDateLabel(value: string) {
   }).format(new Date(year, month - 1, day));
 }
 
+function addDayKey(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day + 1);
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 function calendarCells(value: string) {
   const [year, month] = value.split("-").map(Number);
   const first = new Date(year, month - 1, 1);
@@ -174,6 +180,14 @@ export default function VeterinarianDashboardPage({
     },
   ];
 
+  const upcomingDays = [
+    { date: dashboard.date, label: "Hoje" },
+    { date: addDayKey(dashboard.date), label: "Amanhã" },
+  ].map((day) => ({
+    ...day,
+    items: dashboard.upcoming.filter((appointment) => appointment.date === day.date),
+  }));
+
   return (
     <div className="doctor-dashboard" aria-busy={isLoading}>
       <div className="doctor-dashboard__breadcrumb">
@@ -204,62 +218,68 @@ export default function VeterinarianDashboardPage({
         <section className="doctor-card doctor-today">
           <header className="doctor-card__header">
             <div>
-              <h2>Consultas de hoje</h2>
-              <p>{longDateLabel(dashboard.date)}</p>
+              <h2>Próximas Consultas</h2>
+              <p>Hoje e amanhã</p>
             </div>
             <span className="doctor-card__count">
-              {dashboard.appointments.length}
+              {dashboard.upcoming.length}
             </span>
           </header>
 
-          {dashboard.appointments.length === 0 ? (
-            <div className="users-state">
-              <strong>Nenhuma consulta para hoje.</strong>
-              <p>Seus próximos atendimentos aparecerão aqui.</p>
-            </div>
-          ) : (
-            <div className="doctor-table-wrap">
-              <table className="doctor-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Horário</th>
-                    <th scope="col">Pet</th>
-                    <th scope="col">Tutor</th>
-                    <th scope="col">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dashboard.appointments.map((appointment) => (
-                    <tr key={appointment.id}>
-                      <td>
-                        <strong className="doctor-table__time">
+          <div className="doctor-timeline">
+            {upcomingDays.map((day) => (
+              <section className="doctor-timeline__day" key={day.date}>
+                <header className="doctor-timeline__day-header">
+                  <strong>{day.label}</strong>
+                  <span>{longDateLabel(day.date)}</span>
+                </header>
+
+                {day.items.length === 0 ? (
+                  <p className="doctor-timeline__empty">
+                    Nenhuma consulta para {day.label.toLowerCase()}.
+                  </p>
+                ) : (
+                  <div className="doctor-timeline__list">
+                    {day.items.map((appointment) => (
+                      <article
+                        className="doctor-timeline__item"
+                        key={appointment.id}
+                      >
+                        <time className="doctor-timeline__time">
                           {formatTime(appointment.scheduledAt)}
-                        </strong>
-                      </td>
-                      <td>
-                        <strong>{appointment.animalName}</strong>
-                        <span className="doctor-table__detail">
-                          {appointment.animalSpecies}
-                        </span>
-                      </td>
-                      <td>{appointment.tutorName}</td>
-                      <td>
-                        <span
-                          className={`status-badge status-badge--${appointment.status}`}
-                        >
-                          <span
-                            className="status-badge__dot"
-                            aria-hidden="true"
+                        </time>
+                        <span className="doctor-timeline__marker" aria-hidden="true">
+                          <i
+                            className={`doctor-timeline__dot doctor-timeline__dot--${appointment.status}`}
                           />
-                          {STATUS_LABELS[appointment.status]}
                         </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                        <div className="doctor-timeline__content">
+                          <div className="doctor-timeline__headline">
+                            <span>
+                              <strong>{appointment.animalName}</strong>
+                              <small>{appointment.animalSpecies}</small>
+                            </span>
+                            <span
+                              className={`status-badge status-badge--${appointment.status}`}
+                            >
+                              <span
+                                className="status-badge__dot"
+                                aria-hidden="true"
+                              />
+                              {STATUS_LABELS[appointment.status]}
+                            </span>
+                          </div>
+                          <span className="doctor-timeline__tutor">
+                            Tutor: {appointment.tutorName}
+                          </span>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            ))}
+          </div>
         </section>
 
         <div className="doctor-dashboard__aside">
