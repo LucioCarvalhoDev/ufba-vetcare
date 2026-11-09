@@ -7,7 +7,7 @@ import "./AppShell.css";
 type AppShellProps = {
   user: AuthUser;
   title: string;
-  activeNav: "inicio" | "usuarios";
+  activeNav: "inicio" | "tutores" | "pets" | "usuarios";
   isLoggingOut: boolean;
   onLogout: () => Promise<void>;
   children: ReactNode;
@@ -25,8 +25,20 @@ const NAV_ITEMS: NavItem[] = [
   { key: "inicio", label: "Início", icon: "I", to: "/" },
   { key: "agenda", label: "Minha Agenda", icon: "M" },
   { key: "historico", label: "Histórico", icon: "H" },
-  { key: "tutores", label: "Tutores", icon: "T" },
-  { key: "pets", label: "Pets", icon: "P" },
+  {
+    key: "tutores",
+    label: "Tutores",
+    icon: "T",
+    to: "/tutores",
+    permission: "tutors.read",
+  },
+  {
+    key: "pets",
+    label: "Pets",
+    icon: "P",
+    to: "/pets",
+    permission: "animals.read",
+  },
   {
     key: "usuarios",
     label: "Usuários",

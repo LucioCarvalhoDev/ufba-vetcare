@@ -10,6 +10,13 @@ import type {
   UpdateUserInput,
   UserFilters,
 } from "../types/users";
+import type {
+  Animal,
+  AnimalInput,
+  RegistryStatusFilter,
+  Tutor,
+  TutorInput,
+} from "../types/registry";
 
 type ApiErrorPayload = {
   error?: {
@@ -158,4 +165,110 @@ export async function updateManagedUser(
   );
 
   return response.user;
+}
+
+type RegistryQuery = {
+  q?: string;
+  status?: RegistryStatusFilter;
+};
+
+function registryQuery(filters: RegistryQuery, extra: Record<string, string> = {}) {
+  const params = new URLSearchParams();
+
+  if (filters.q) {
+    params.set("q", filters.q);
+  }
+
+  if (filters.status) {
+    params.set("status", filters.status);
+  }
+
+  for (const [key, value] of Object.entries(extra)) {
+    if (value) {
+      params.set(key, value);
+    }
+  }
+
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+export async function fetchTutors(filters: RegistryQuery = {}): Promise<Tutor[]> {
+  const response = await request<{ tutors: Tutor[]; total: number }>(
+    `/tutors${registryQuery(filters)}`,
+    { method: "GET" },
+  );
+
+  return response.tutors;
+}
+
+export async function fetchTutor(id: string): Promise<Tutor> {
+  const response = await request<{ tutor: Tutor }>(
+    `/tutors/${encodeURIComponent(id)}`,
+    { method: "GET" },
+  );
+
+  return response.tutor;
+}
+
+export async function createTutor(input: TutorInput): Promise<Tutor> {
+  const response = await request<{ tutor: Tutor }>("/tutors", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
+  return response.tutor;
+}
+
+export async function updateTutor(id: string, input: TutorInput): Promise<Tutor> {
+  const response = await request<{ tutor: Tutor }>(
+    `/tutors/${encodeURIComponent(id)}`,
+    { method: "PUT", body: JSON.stringify(input) },
+  );
+
+  return response.tutor;
+}
+
+export async function fetchAnimals(
+  filters: RegistryQuery & { tutorId?: string; species?: string } = {},
+): Promise<Animal[]> {
+  const response = await request<{ animals: Animal[]; total: number }>(
+    `/animals${registryQuery(filters, {
+      tutorId: filters.tutorId ?? "",
+      species: filters.species ?? "",
+    })}`,
+    { method: "GET" },
+  );
+
+  return response.animals;
+}
+
+export async function fetchAnimal(id: string): Promise<Animal> {
+  const response = await request<{ animal: Animal }>(
+    `/animals/${encodeURIComponent(id)}`,
+    { method: "GET" },
+  );
+
+  return response.animal;
+}
+
+export async function createAnimal(input: AnimalInput): Promise<Animal> {
+  const response = await request<{ animal: Animal }>("/animals", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
+  return response.animal;
+}
+
+export async function updateAnimal(
+  id: string,
+  input: AnimalInput,
+): Promise<Animal> {
+  const response = await request<{ animal: Animal }>(
+    `/animals/${encodeURIComponent(id)}`,
+    { method: "PUT", body: JSON.stringify(input) },
+  );
+
+  return response.animal;
 }
