@@ -12,6 +12,7 @@ import {
   verifyPassword,
 } from "./security.js";
 import { hasPermission } from "./permissions.js";
+import { createRecordsRouter } from "./records.js";
 
 const MAX_BODY_BYTES = 16 * 1024;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -807,6 +808,18 @@ export function createVetCareServer({
     sendJson(res, 200, { user: managedUser(user) });
   }
 
+  const handleRecords = createRecordsRouter({
+    database,
+    requirePermission,
+    isSameOriginRequest,
+    readJsonBody,
+    sendJson,
+    sendNoContent,
+    getClientIp,
+    getUserAgent,
+    HttpError,
+  });
+
   async function handleRequest(req, res) {
     setSecurityHeaders(res);
 
@@ -838,6 +851,15 @@ export function createVetCareServer({
 
       if (req.method === "GET" && pathname === "/api/roles") {
         return handleListRoles(req, res);
+      }
+
+      if (
+        pathname === "/api/tutors" ||
+        pathname.startsWith("/api/tutors/") ||
+        pathname === "/api/animals" ||
+        pathname.startsWith("/api/animals/")
+      ) {
+        return handleRecords(req, res, pathname);
       }
 
       const userRoute = pathname.match(/^\/api\/users\/([^/]+)$/);

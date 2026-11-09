@@ -612,3 +612,212 @@ test("atualização de usuário inexistente retorna 404", async () => {
   assert.equal(response.status, 404);
   assert.equal(body.error.code, "user_not_found");
 });
+
+test("API de tutores e animais aplica CRUD, filtros, RBAC e auditoria", async () => {
+  const adminLogin = await loginRequest(TEST_EMAIL, TEST_PASSWORD);
+  const adminCookie = sessionCookie(adminLogin);
+
+  const vet = await database.createUser({
+    name: "Veterinário da API",
+    email: "vet.api@vetcare.com",
+    password: "SenhaVetApi123!",
+    roleSlugs: ["veterinario"],
+  });
+  assert.ok(vet);
+
+  const vetLogin = await loginRequest(
+    "vet.api@vetcare.com",
+    "SenhaVetApi123!",
+  );
+  const vetCookie = sessionCookie(vetLogin);
+
+  const anonymous = await fetch(`${baseUrl}/api/tutors`);
+  assert.equal(anonymous.status, 401);
+
+  const tutorResponse = await fetch(`${baseUrl}/api/tutors`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: adminCookie,
+    },
+    body: JSON.stringify({
+      name: "Mariana Souza",
+      cpf: "111.222.333-44",
+      email: "mariana.api@vetcare.com",
+      phone: "(71) 99999-0000",
+      address: "Salvador, BA",
+    }),
+  });
+  const tutorBody = await tutorResponse.json();
+
+  assert.equal(tutorResponse.status, 201);
+  assert.equal(tutorBody.tutor.name, "Mariana Souza");
+  assert.equal(tutorBody.tutor.animalCount, 0);
+
+  const tutorId = tutorBody.tutor.id;
+
+  const duplicateCpf = await fetch(`${baseUrl}/api/tutors`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: adminCookie,
+    },
+    body: JSON.stringify({
+      name: "Outro Tutor",
+      cpf: "111.222.333-44",
+    }),
+  });
+  assert.equal(duplicateCpf.status, 409);
+
+  const tutorList = await fetch(
+    `${baseUrl}/api/tutors?q=mariana&status=active`,
+    { headers: { cookie: adminCookie } },
+  );
+  const tutorListBody = await tutorList.json();
+
+  assert.equal(tutorList.status, 200);
+  assert.equal(tutorListBody.total, 1);
+  assert.equal(tutorListBody.tutors[0].id, tutorId);
+
+  const vetRead = await fetch(`${baseUrl}/api/tutors`, {
+    headers: { cookie: vetCookie },
+  });
+  assert.equal(vetRead.status, 200);
+
+  const vetCreate = await fetch(`${baseUrl}/api/tutors`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: vetCookie,
+    },
+    body: JSON.stringify({ name: "Sem Permissão" }),
+  });
+  assert.equal(vetCreate.status, 403);
+
+  const animalResponse = await fetch(`${baseUrl}/api/animals`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: adminCookie,
+    },
+    body: JSON.stringify({
+      tutorId,
+      name: "Thor",
+      species: "Cão",
+      breed: "SRD",
+      sex: "male",
+      birthDate: "2022-05-10",
+    }),
+  });
+  const animalBody = await animalResponse.json();
+
+  assert.equal(animalResponse.status, 201);
+  assert.equal(animalBody.animal.tutorId, tutorId);
+  assert.equal(animalBody.animal.tutorName, "Mariana Souza");
+
+  const animalId = animalBody.animal.id;
+
+  const animalList = await fetch(
+    `${baseUrl}/api/animals?q=thor&tutorId=${tutorId}&species=C%C3%A3o&status=active`,
+    { headers: { cookie: adminCookie } },
+  );
+  const animalListBody = await animalList.json();
+
+  assert.equal(animalList.status, 200);
+  assert.equal(animalListBody.total, 1);
+  assert.equal(animalListBody.animals[0].name, "Thor");
+
+  const invalidStatus = await fetch(`${baseUrl}/api/animals?status=invalid`, {
+    headers: { cookie: adminCookie },
+  });
+  assert.equal(invalidStatus.status, 400);
+
+  const invalidSex = await fetch(`${baseUrl}/api/animals`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: adminCookie,
+    },
+    body: JSON.stringify({
+      tutorId,
+      name: "Mia",
+      species: "Gato",
+      sex: "invalid",
+    }),
+  });
+  assert.equal(invalidSex.status, 400);
+
+  const updateTutor = await fetch(`${baseUrl}/api/tutors/${tutorId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: adminCookie,
+    },
+    body: JSON.stringify({
+      name: "Mariana Souza",
+      cpf: "111.222.333-44",
+      email: "mariana.api@vetcare.com",
+      phone: "(71) 98888-1111",
+      address: "Salvador, BA",
+      isActive: false,
+    }),
+  });
+  assert.equal(updateTutor.status, 200);
+  assert.equal((await updateTutor.json()).tutor.isActive, false);
+
+  const updateAnimal = await fetch(`${baseUrl}/api/animals/${animalId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: adminCookie,
+    },
+    body: JSON.stringify({
+      tutorId,
+      name: "Thor II",
+      species: "Cão",
+      breed: "SRD",
+      sex: "female",
+      birthDate: "2022-05-10",
+      isActive: false,
+    }),
+  });
+  assert.equal(updateAnimal.status, 200);
+  assert.equal((await updateAnimal.json()).animal.name, "Thor II");
+
+  const blockedTutorDelete = await fetch(
+    `${baseUrl}/api/tutors/${tutorId}`,
+    { method: "DELETE", headers: { cookie: adminCookie } },
+  );
+  assert.equal(blockedTutorDelete.status, 409);
+
+  const animalDelete = await fetch(`${baseUrl}/api/animals/${animalId}`, {
+    method: "DELETE",
+    headers: { cookie: adminCookie },
+  });
+  assert.equal(animalDelete.status, 204);
+
+  const tutorDelete = await fetch(`${baseUrl}/api/tutors/${tutorId}`, {
+    method: "DELETE",
+    headers: { cookie: adminCookie },
+  });
+  assert.equal(tutorDelete.status, 204);
+
+  const actions = database.connection
+    .prepare(
+      `SELECT DISTINCT action
+       FROM audit_logs
+       WHERE action LIKE 'tutors.%' OR action LIKE 'animals.%'
+       ORDER BY action`,
+    )
+    .all()
+    .map((row) => row.action);
+
+  assert.deepEqual(actions, [
+    "animals.create",
+    "animals.delete",
+    "animals.update",
+    "tutors.create",
+    "tutors.delete",
+    "tutors.update",
+  ]);
+});
