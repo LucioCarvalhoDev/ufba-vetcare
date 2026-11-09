@@ -397,6 +397,71 @@
   white-space: nowrap;
 }
 
+.schedule-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.schedule-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--home-muted);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  user-select: none;
+}
+
+.schedule-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.schedule-toggle__track {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: background-color 150ms ease;
+}
+
+.schedule-toggle__track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 18%);
+  transition: transform 150ms ease;
+}
+
+.schedule-toggle input:checked + .schedule-toggle__track {
+  background: var(--home-primary);
+}
+
+.schedule-toggle input:checked + .schedule-toggle__track::after {
+  transform: translateX(14px);
+}
+
+.schedule-toggle input:focus-visible + .schedule-toggle__track {
+  outline: 2px solid var(--home-primary);
+  outline-offset: 2px;
+}
+
 .schedule-legend {
   display: flex;
   align-items: center;
@@ -504,6 +569,12 @@
   .schedule-subheader {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .schedule-controls {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
   }
 
   .schedule-legend {

@@ -1,6 +1,7 @@
-import type {
-  MouseEvent as ReactMouseEvent,
-  PointerEvent as ReactPointerEvent,
+import {
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import type {
   ScheduleStatus,
@@ -52,6 +53,12 @@ const TIME_SLOTS = Array.from({ length: 48 }, (_, index) => {
   return { minutes, label: `${hours}:${rest}` };
 });
 
+const STANDARD_START = 6 * 60;
+const STANDARD_END = 20 * 60;
+const STANDARD_SLOTS = TIME_SLOTS.filter(
+  (slot) => slot.minutes >= STANDARD_START && slot.minutes < STANDARD_END,
+);
+
 const STATUS_LABELS: Record<ScheduleStatus, string> = {
   free: "horário livre",
   busy: "sem médicos livres",
@@ -76,6 +83,9 @@ export default function ScheduleGrid({
   onPointerOver,
   onClick,
 }: ScheduleGridProps) {
+  const [showNonStandard, setShowNonStandard] = useState(false);
+  const visibleTimeSlots = showNonStandard ? TIME_SLOTS : STANDARD_SLOTS;
+
   return (
     <section className="availability-card schedule-card">
       <header className="availability-card__header schedule-card__header">
@@ -112,23 +122,36 @@ export default function ScheduleGrid({
 
       <div className="schedule-subheader">
         <span className="schedule-week">{weekLabel}</span>
-        <div className="schedule-legend" aria-label="Legenda da agenda">
-          <span className="schedule-legend__item">
-            <i className="schedule-legend__swatch schedule-cell--free" />
-            Livre
-          </span>
-          <span className="schedule-legend__item">
-            <i className="schedule-legend__swatch schedule-cell--busy" />
-            Sem médicos livres
-          </span>
-          <span className="schedule-legend__item">
-            <i className="schedule-legend__swatch schedule-cell--closed" />
-            Sem atendimento
-          </span>
-          <span className="schedule-legend__item">
-            <i className="schedule-legend__swatch is-selected" />
-            Selecionado
-          </span>
+        <div className="schedule-controls">
+          <label className="schedule-toggle">
+            <input
+              type="checkbox"
+              role="switch"
+              checked={showNonStandard}
+              onChange={(event) => setShowNonStandard(event.target.checked)}
+            />
+            <span className="schedule-toggle__track" aria-hidden="true" />
+            <span className="schedule-toggle__label">Horários não padrão</span>
+          </label>
+
+          <div className="schedule-legend" aria-label="Legenda da agenda">
+            <span className="schedule-legend__item">
+              <i className="schedule-legend__swatch schedule-cell--free" />
+              Livre
+            </span>
+            <span className="schedule-legend__item">
+              <i className="schedule-legend__swatch schedule-cell--busy" />
+              Sem médicos livres
+            </span>
+            <span className="schedule-legend__item">
+              <i className="schedule-legend__swatch schedule-cell--closed" />
+              Sem atendimento
+            </span>
+            <span className="schedule-legend__item">
+              <i className="schedule-legend__swatch is-selected" />
+              Selecionado
+            </span>
+          </div>
         </div>
       </div>
 
@@ -163,7 +186,7 @@ export default function ScheduleGrid({
               </tr>
             </thead>
             <tbody>
-              {TIME_SLOTS.map((slot) => (
+              {visibleTimeSlots.map((slot) => (
                 <tr key={slot.minutes}>
                   <th scope="row">{slot.label}</th>
                   {schedule.days.map((day) => {
