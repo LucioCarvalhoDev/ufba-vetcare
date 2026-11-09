@@ -42,3 +42,13 @@ export type AppointmentFilters = {
   status?: AppointmentStatus | "";
   veterinarianId?: string;
 };
+
+export type AvailabilitySlot = {
+  weekday: number;
+  startMinutes: number;
+};
+
+export type VeterinarianAvailability = {
+  veterinarian: Veterinarian;
+  slots: AvailabilitySlot[];
+};

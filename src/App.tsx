@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import AppShell from "./components/AppShell";
 import AppointmentFormPage from "./pages/AppointmentFormPage";
+import AvailabilityPage from "./pages/AvailabilityPage";
 import AppointmentsListPage from "./pages/AppointmentsListPage";
 import HomePage from "./pages/HomePage";
 import PetsListPage from "./pages/PetsListPage";
@@ -250,6 +251,30 @@ export default function App() {
         onLogout={handleLogout}
       >
         <UserFormPage key="create" user={user} mode="create" />
+      </AppShell>
+    );
+  }
+
+  const availabilityMatch = pathname.match(
+    /^\/usuarios\/([^/]+)\/disponibilidade$/,
+  );
+
+  if (availabilityMatch) {
+    const veterinarianId = availabilityMatch[1];
+
+    return (
+      <AppShell
+        user={user}
+        title="Disponibilidade"
+        activeNav="usuarios"
+        isLoggingOut={isLoggingOut}
+        onLogout={handleLogout}
+      >
+        <AvailabilityPage
+          key={`availability-${veterinarianId}`}
+          user={user}
+          veterinarianId={veterinarianId}
+        />
       </AppShell>
     );
   }

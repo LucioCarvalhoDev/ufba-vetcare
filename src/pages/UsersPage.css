@@ -702,6 +702,10 @@
   line-height: 1.5;
 }
 
+.user-form__section .button {
+  margin-top: 12px;
+}
+
 @media (max-width: 900px) {
   .users-page {
     padding-bottom: 96px;

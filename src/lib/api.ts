@@ -21,7 +21,9 @@ import type {
   Appointment,
   AppointmentFilters,
   AppointmentInput,
+  AvailabilitySlot,
   Veterinarian,
+  VeterinarianAvailability,
 } from "../types/appointments";
 
 type ApiErrorPayload = {
@@ -348,4 +350,26 @@ export async function fetchVeterinarians(): Promise<Veterinarian[]> {
   );
 
   return response.veterinarians;
+}
+
+export async function fetchVeterinarianAvailability(
+  id: string,
+): Promise<VeterinarianAvailability> {
+  return request<VeterinarianAvailability>(
+    `/veterinarians/${encodeURIComponent(id)}/availability`,
+    { method: "GET" },
+  );
+}
+
+export async function updateVeterinarianAvailability(
+  id: string,
+  slots: AvailabilitySlot[],
+): Promise<VeterinarianAvailability> {
+  return request<VeterinarianAvailability>(
+    `/veterinarians/${encodeURIComponent(id)}/availability`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ slots }),
+    },
+  );
 }

@@ -14,6 +14,7 @@ import {
 import { hasPermission } from "./permissions.js";
 import { createRecordsRouter } from "./records.js";
 import { createAppointmentsRouter } from "./appointments.js";
+import { createAvailabilityRouter } from "./availability.js";
 
 const MAX_BODY_BYTES = 16 * 1024;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -821,6 +822,17 @@ export function createVetCareServer({
     HttpError,
   });
 
+  const handleAvailability = createAvailabilityRouter({
+    database,
+    requirePermission,
+    isSameOriginRequest,
+    readJsonBody,
+    sendJson,
+    getClientIp,
+    getUserAgent,
+    HttpError,
+  });
+
   const handleAppointments = createAppointmentsRouter({
     database,
     requirePermission,
@@ -872,6 +884,13 @@ export function createVetCareServer({
         pathname.startsWith("/api/animals/")
       ) {
         return handleRecords(req, res, pathname);
+      }
+
+      if (
+        pathname.startsWith("/api/veterinarians/") &&
+        pathname.endsWith("/availability")
+      ) {
+        return handleAvailability(req, res, pathname);
       }
 
       if (

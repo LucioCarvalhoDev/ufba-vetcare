@@ -1,0 +1,195 @@
+.availability-page {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-bottom: 24px;
+}
+
+.availability-card {
+  overflow: hidden;
+  border: 1px solid var(--home-border);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.availability-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--home-border);
+}
+
+.availability-card__header h2 {
+  margin: 0;
+  color: var(--home-text);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+}
+
+.availability-card__header p {
+  margin: 5px 0 0;
+  color: var(--home-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.availability-count {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--home-accent);
+  color: var(--home-primary-dark);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.availability-scroll {
+  max-height: 560px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.availability-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+.availability-table th,
+.availability-table td {
+  padding: 0;
+  border-right: 1px solid var(--home-border);
+  border-bottom: 1px solid var(--home-border);
+}
+
+.availability-table th:last-child,
+.availability-table td:last-child {
+  border-right: 0;
+}
+
+.availability-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 42px;
+  background: var(--home-surface);
+  color: var(--home-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.availability-table thead th:first-child {
+  left: 0;
+  z-index: 4;
+  width: 70px;
+  text-align: left;
+  padding-left: 14px;
+}
+
+.availability-table tbody th {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: 70px;
+  height: 32px;
+  padding-left: 14px;
+  background: #fff;
+  color: var(--home-subtle);
+  font-size: 11px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.availability-table tbody td {
+  height: 32px;
+  background: #fbfdfc;
+}
+
+.availability-cell {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 31px;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.availability-cell:hover:not(:disabled) {
+  background: #f0fdfa;
+  color: var(--home-primary);
+}
+
+.availability-cell:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--home-primary);
+  outline-offset: -2px;
+}
+
+.availability-cell.is-selected {
+  background: var(--home-primary);
+  color: #fff;
+}
+
+.availability-cell.is-selected:hover:not(:disabled) {
+  background: var(--home-primary-dark);
+}
+
+.availability-cell:disabled {
+  cursor: not-allowed;
+}
+
+.availability-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--home-border);
+}
+
+.availability-card__state {
+  color: var(--home-muted);
+  font-size: 12px;
+}
+
+.availability-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .availability-card__header {
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px 18px;
+  }
+
+  .availability-card__footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .availability-card__actions {
+    justify-content: flex-end;
+  }
+}

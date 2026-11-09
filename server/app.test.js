@@ -989,3 +989,125 @@ test("API de agendamentos cobre CRUD, conflito, cancelamento e auditoria", async
     "appointments.update",
   ]);
 });
+
+test("disponibilidade semanal do veterinário é editável e protegida", async () => {
+  const adminLogin = await loginRequest(TEST_EMAIL, TEST_PASSWORD);
+  const adminCookie = sessionCookie(adminLogin);
+
+  const vet = await database.createUser({
+    name: "Veterinário da Disponibilidade",
+    email: "vet.disponibilidade@vetcare.com",
+    password: "SenhaVetDisponibilidade123!",
+    roleSlugs: ["veterinario"],
+  });
+
+  assert.ok(vet);
+
+  const initial = await fetch(
+    `${baseUrl}/api/veterinarians/${vet.id}/availability`,
+    { headers: { cookie: adminCookie } },
+  );
+  const initialBody = await initial.json();
+
+  assert.equal(initial.status, 200);
+  assert.equal(initialBody.veterinarian.name, "Veterinário da Disponibilidade");
+  assert.deepEqual(initialBody.slots, []);
+
+  const slots = [
+    { weekday: 1, startMinutes: 480 },
+    { weekday: 1, startMinutes: 510 },
+    { weekday: 2, startMinutes: 540 },
+  ];
+  const update = await fetch(
+    `${baseUrl}/api/veterinarians/${vet.id}/availability`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        cookie: adminCookie,
+      },
+      body: JSON.stringify({ slots }),
+    },
+  );
+  const updateBody = await update.json();
+
+  assert.equal(update.status, 200);
+  assert.deepEqual(updateBody.slots, slots);
+
+  const saved = await fetch(
+    `${baseUrl}/api/veterinarians/${vet.id}/availability`,
+    { headers: { cookie: adminCookie } },
+  );
+  assert.deepEqual((await saved.json()).slots, slots);
+
+  const invalidWeekday = await fetch(
+    `${baseUrl}/api/veterinarians/${vet.id}/availability`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        cookie: adminCookie,
+      },
+      body: JSON.stringify({ slots: [{ weekday: 8, startMinutes: 480 }] }),
+    },
+  );
+  assert.equal(invalidWeekday.status, 400);
+
+  const invalidMinutes = await fetch(
+    `${baseUrl}/api/veterinarians/${vet.id}/availability`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        cookie: adminCookie,
+      },
+      body: JSON.stringify({ slots: [{ weekday: 1, startMinutes: 485 }] }),
+    },
+  );
+  assert.equal(invalidMinutes.status, 400);
+
+  const receptionistLogin = await loginRequest(
+    "recepcao@vetcare.com",
+    "SenhaRecepcao123!",
+  );
+  const receptionistCookie = sessionCookie(receptionistLogin);
+
+  const readOnly = await fetch(
+    `${baseUrl}/api/veterinarians/${vet.id}/availability`,
+    { headers: { cookie: receptionistCookie } },
+  );
+  assert.equal(readOnly.status, 200);
+
+  const forbidden = await fetch(
+    `${baseUrl}/api/veterinarians/${vet.id}/availability`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        cookie: receptionistCookie,
+      },
+      body: JSON.stringify({ slots }),
+    },
+  );
+  assert.equal(forbidden.status, 403);
+
+  const admin = database.getUserAuthByEmail(TEST_EMAIL);
+  assert.ok(admin);
+
+  const notVet = await fetch(
+    `${baseUrl}/api/veterinarians/${admin.id}/availability`,
+    { headers: { cookie: adminCookie } },
+  );
+  assert.equal(notVet.status, 404);
+
+  const audit = database.connection
+    .prepare(
+      `SELECT action, result, resource
+       FROM audit_logs
+       WHERE action = 'veterinarians.availability_update' AND resource = ?
+       ORDER BY created_at DESC LIMIT 1`,
+    )
+    .get(vet.id);
+
+  assert.equal(audit?.result, "success");
+});

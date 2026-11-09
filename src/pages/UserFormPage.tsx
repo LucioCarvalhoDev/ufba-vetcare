@@ -433,6 +433,22 @@ export default function UserFormPage({
             </p>
           </div>
 
+          {isEdit && userId && roleSlugs.includes("veterinario") ? (
+            <div className="user-form__section">
+              <h3 className="user-form__section-title">Disponibilidade</h3>
+              <p className="user-form__section-description">
+                Defina os dias e horários em que este veterinário pode receber
+                agendamentos.
+              </p>
+              <Link
+                className="button button--ghost"
+                to={`/usuarios/${userId}/disponibilidade`}
+              >
+                Gerenciar disponibilidade
+              </Link>
+            </div>
+          ) : null}
+
           <div className="form-actions">
             <Link className="button button--ghost" to="/usuarios">
               Cancelar

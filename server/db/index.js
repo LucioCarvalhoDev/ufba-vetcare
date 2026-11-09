@@ -6,6 +6,7 @@ import { createAuditRepository } from "./repositories/audit.js";
 import { createTutorsRepository } from "./repositories/tutors.js";
 import { createAnimalsRepository } from "./repositories/animals.js";
 import { createAppointmentsRepository } from "./repositories/appointments.js";
+import { createAvailabilityRepository } from "./repositories/availability.js";
 
 export async function openDatabase({
   filename = "data/vetcare.db",
@@ -35,6 +36,7 @@ export async function openDatabase({
     ...createTutorsRepository(connection),
     ...createAnimalsRepository(connection),
     ...createAppointmentsRepository(connection),
+    ...createAvailabilityRepository(connection),
   };
 
   database.deleteExpiredSessions();
