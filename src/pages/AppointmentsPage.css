@@ -493,7 +493,7 @@
 }
 
 .schedule-grid-scroll {
-  max-height: 380px;
+  max-height: none;
 }
 
 .schedule-table thead th {

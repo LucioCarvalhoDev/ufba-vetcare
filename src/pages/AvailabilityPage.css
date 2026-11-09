@@ -49,9 +49,10 @@
 }
 
 .availability-scroll {
-  max-height: 560px;
-  overflow: auto;
-  overscroll-behavior: contain;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: visible;
+  overscroll-behavior: auto;
 }
 
 .availability-table {
