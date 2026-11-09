@@ -1,8 +1,11 @@
 # VetCare — Sistema de Gestão para Clínicas Veterinárias
 
-> Trabalho da disciplina de **Engenharia de Software** — Modelagem arquitetural e documentação do sistema VetCare, desenvolvido na Universidade Federal da Bahia (UFBA).
+> Sistema acadêmico de gestão para clínicas veterinárias, desenvolvido na Universidade Federal da Bahia (UFBA), com implementação full-stack incremental sobre a arquitetura documentada na Etapa I.
 
 ![React](https://img.shields.io/badge/React-18.x-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-24%2B-339933?style=for-the-badge&logo=node.js&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
 ![UFBA](https://img.shields.io/badge/UFBA-Engenharia_de_Software-blue?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
 
@@ -10,194 +13,296 @@
 
 ## Sobre o Projeto
 
-Este repositório contém a **documentação arquitetural** e os artefatos de modelagem do **VetCare**, um sistema de software desenvolvido como parte da disciplina de **Engenharia de Software** da **Universidade Federal da Bahia (UFBA)**. 
+O VetCare tem como objetivo gerenciar as operações diárias de uma clínica veterinária, abrangendo cadastros, agenda, disponibilidade profissional e acompanhamento do atendimento.
 
-O objetivo é aplicar na prática os conceitos de:
-- Modelagem de arquitetura de software
-- Definição de características arquiteturais e requisitos não funcionais
-- Organização de componentes e pacotes (UML)
-- Documentação técnica e prototipação de interfaces
-- Integração entre equipes e boas práticas de desenvolvimento
+O repositório reúne:
 
-O sistema tem como objetivo gerenciar as operações diárias de uma clínica veterinária, abrangendo desde o cadastro de tutores e animais até o gerenciamento clínico, financeiro e de suporte.
+- documentação arquitetural e ADRs;
+- protótipo de interfaces;
+- implementação full-stack;
+- testes automatizados de API e domínio;
+- roteiro de evolução dos requisitos.
 
----
+### Estado atual
 
-## Características Arquiteturais
-
-Para garantir que o VetCare atenda às necessidades do negócio e dos usuários, as seguintes características arquiteturais foram consideradas prioritárias (Top 4):
-
-- [x] **Segurança**: Tratada como prioridade base. Autenticação e autorização não são camadas adicionais, mas sim fundamentais para proteger os dados clínicos e pessoais (LGPD).
-- [x] **Disponibilidade e Estabilidade**: O sistema deve permanecer operante durante o horário de funcionamento. Requer mecanismos de tolerância a falhas e monitoramento.
-- [x] **Desempenho**: As operações frequentes (agenda, prontuário) devem ser otimizadas para garantir a eficiência do atendimento.
-- [x] **Manutenibilidade**: A arquitetura deve favorecer a evolução do sistema com baixo impacto, facilitando correções e adaptações futuras.
-
-> **Outras características consideradas:** Usabilidade, Auditabilidade, Confiabilidade.
+- **21 testes automatizados** passando.
+- `npm run typecheck` e `npm run build` passando.
+- Banco SQLite com **4 migrations versionadas**.
+- **5 requisitos completos**, 3 parciais e 9 pendentes dos 17 requisitos funcionais.
+- Cobertura completa de aproximadamente **30%** dos requisitos, com os principais fluxos de cadastro, autenticação e agenda implementados.
 
 ---
 
-## Arquitetura do Sistema
+## Funcionalidades Implementadas
 
-O VetCare foi projetado seguindo uma arquitetura em camadas combinada com a separação por domínios de negócio. O objetivo é promover **alta coesão** e **baixo acoplamento**, facilitando a manutenção e evolução do sistema.
+### Segurança e acesso
 
-### Visão Hierárquica (Árvore de Pacotes)
+- Login com sessão persistida em cookie `HttpOnly`.
+- Logout e restauração de sessão.
+- RBAC com papéis **Administrador**, **Recepcionista** e **Veterinário**.
+- Permissões granulares por módulo e ação.
+- Auditoria de login, alterações e exclusões no backend.
+- Proteção contra remoção do último administrador ativo.
+
+### Usuários
+
+- Listagem, criação e edição de usuários.
+- Associação de múltiplos papéis.
+- Ativação e desativação.
+- Filtros por nome, e-mail, papel e situação.
+
+### Tutores e animais
+
+- CRUD completo de tutores.
+- CRUD completo de animais, vinculados a um tutor.
+- Filtros por busca, tutor e situação.
+- Exclusão com confirmação.
+- Bloqueio de exclusão de tutor com animais vinculados.
+- Bloqueio de exclusão de animal com agendamentos vinculados.
+
+### Agenda
+
+- Agendamento de **consultas**, **operações** e **vacinações**.
+- Edição, cancelamento e listagem.
+- Validação de conflito por veterinário, data e duração.
+- Filtros por animal/tutor, tipo, situação e profissional.
+- Agenda visual semanal com:
+  - horários livres em verde;
+  - horários sem profissionais livres em amarelo;
+  - horários sem atendimento em cinza;
+  - seleção contígua em azul;
+  - horário padrão de 07:00 a 17:30, com switch para o dia completo.
+- Seleção auxiliar de profissional com busca textual e filtro por disponibilidade e conflitos.
+
+### Disponibilidade profissional
+
+- Grade semanal de 30 minutos.
+- Seleção e remoção por clique ou arrasto.
+- Switch de horários não padrão.
+- Persistência por veterinário.
+
+### Minha Agenda do veterinário
+
+- Página inicial exclusiva para veterinários.
+- Métricas do dia: consultas, concluídas, pendentes e canceladas.
+- Próximas consultas em linha do tempo, com hoje e amanhã.
+- Calendário mensal navegável com dias que possuem consultas.
+- Resumo semanal em gráfico de barras.
+
+---
+
+## Cobertura dos Requisitos
+
+| REQ | Status | Situação |
+|---|---|---|
+| 01 — Manter usuário | 🟡 Parcial | Criar, listar e editar; falta exclusão de usuário. |
+| 02 — Autenticar usuário | ✅ Completo | Login, sessão, logout e RBAC. |
+| 03 — Recuperar senha | ⬜ Pendente | — |
+| 04 — Manter tutor | ✅ Completo | CRUD completo, com exclusão protegida. |
+| 05 — Manter animal | ✅ Completo | CRUD completo, com exclusão protegida. |
+| 06 — Manter veterinário | 🟡 Parcial | Vets via usuário + disponibilidade; falta perfil com CRMV/especialidade. |
+| 07 — Agendar consulta | ✅ Completo | Consulta, operação e vacinação, com agenda visual. |
+| 08 — Cancelar consulta | ✅ Completo | Cancelamento e liberação do horário. |
+| 09 — Consultar agenda | 🟡 Parcial | Minha Agenda e filtros por profissional; falta visão dia/semana na agenda geral. |
+| 10 — Registrar atendimento | ⬜ Pendente | — |
+| 11 — Manter prontuário | ⬜ Pendente | — |
+| 12 — Registrar vacinação | ⬜ Pendente | Existe apenas o agendamento do tipo vacinação. |
+| 13 — Emitir prescrição | ⬜ Pendente | — |
+| 14 — Registrar pagamento | ⬜ Pendente | — |
+| 15 — Dashboard financeiro | ⬜ Pendente | — |
+| 16 — Notificar tutor | ⬜ Pendente | — |
+| 17 — Gerar relatórios gerenciais | ⬜ Pendente | — |
+
+**Resumo:** 5 completos, 3 parciais e 9 pendentes. A meta inicial de aproximadamente 30% dos requisitos foi atingida.
+
+---
+
+## Arquitetura
+
+O VetCare utiliza uma arquitetura em camadas combinada com separação por domínios de negócio.
+
+### Frontend
+
+- React 18 + TypeScript.
+- Vite para desenvolvimento e build.
+- SPA com roteamento próprio baseado em History API.
+- Componentes reutilizáveis de tabela, agenda, disponibilidade e formulários.
+- Layout responsivo com `AppShell` compartilhado.
+
+### Backend
+
+- Node.js com servidor HTTP nativo.
+- SQLite via `node:sqlite`.
+- Migrations versionadas com `PRAGMA user_version`.
+- Repositórios por domínio.
+- RBAC e auditoria transversais.
+- API JSON com validação, tratamento de erros e cookies de sessão.
+
+### Estrutura de código
 
 ```text
-VetCare
-├── apresentacao
-│   ├── ui
-│   └── gateway
-├── seguranca
-│   ├── autenticacao
-│   ├── autorizacao
-│   └── auditoria
-├── cadastros
-│   ├── usuarios
-│   ├── tutores
-│   ├── animais
-│   └── veterinarios
-├── clinico
-│   ├── agenda
-│   ├── atendimentos
-│   ├── prontuarios
-│   ├── vacinacao
-│   └── prescricoes
-├── financeiro
-│   ├── pagamentos
-│   ├── dashboard
-│   └── relatorios
-├── suporte
-│   ├── notificacoes
-│   ├── cache
-│   ├── fila
-│   ├── backup
-│   └── monitoramento
-└── persistencia
-    └── banco_dados
+src/
+├── components/       # AppShell, ícones e agenda visual
+├── lib/              # API, navegação, formatação e utilitários
+├── pages/            # Login, cadastros, agenda, disponibilidade e dashboard
+├── types/            # Contratos TypeScript
+└── App.tsx           # Composição das rotas
+server/
+├── app.js            # Servidor HTTP e rotas de autenticação/usuários
+├── appointments.js   # API de agendamentos
+├── availability.js   # API de disponibilidade
+├── schedule.js       # Agenda visual semanal
+├── dashboard.js      # Dashboard do veterinário
+├── records.js        # API de tutores e animais
+├── db/
+│   ├── migrations/   # 001 a 004
+│   ├── repositories/ # Usuários, agenda, disponibilidade, dashboard etc.
+│   ├── connection.js
+│   ├── migrations.js
+│   ├── seed.js
+│   └── index.js
+├── app.test.js
+└── domain.test.js
 ```
 
-### Critério de Organização dos Pacotes
-Os pacotes foram organizados por **camada arquitetural** e por **domínio de negócio**:
-*   `apresentacao`: Concentra a interação com o usuário e o ponto único de entrada (API Gateway).
-*   `seguranca`: Componente transversal que agrupa autenticação, autorização e auditoria.
-*   `cadastros`, `clinico`, `financeiro`: Os três domínios de negócio principais do VetCare.
-*   `suporte`: Serviços técnicos reutilizáveis (cache, fila, backup, monitoramento, notificações).
-*   `persistencia`: Isolamento do acesso ao banco de dados.
+### Modelo de dados atual
+
+- `users`, `roles`, `permissions`, `user_roles`, `role_permissions`
+- `sessions`
+- `audit_logs`
+- `tutors`
+- `animals`
+- `appointments`
+- `veterinarian_availability`
 
 ---
 
-## Componentes Candidatos
+## API
 
-Abaixo estão listados os componentes do sistema, suas responsabilidades e as características arquiteturais associadas.
+Principais endpoints:
 
-### Principais Módulos e Serviços
+```text
+POST   /api/auth/login
+GET    /api/auth/me
+POST   /api/auth/logout
 
-| Componente | Responsabilidade | Características |
-|-----------|------------------|-----------------|
-| **API Gateway** | Ponto único de entrada, roteamento, autenticação inicial e rate limiting. | Segurança, Manutenibilidade, Desempenho |
-| **Serviço de Autenticação** | Validação de credenciais e emissão de tokens. | Segurança, Disponibilidade |
-| **Serviço de Autorização (RBAC)** | Controle de permissões por papéis (Admin, Recepcionista, Veterinário). | Segurança, Manutenibilidade |
-| **Módulo de Auditoria** | Registro de acessos e alterações para conformidade legal. | Segurança, Confiabilidade, Auditabilidade |
-| **Módulo de Agenda/Consultas** | Agendamento, cancelamento e visualização de consultas. | Desempenho, Disponibilidade, Manutenibilidade |
-| **Módulo de Prontuários** | Histórico de diagnósticos, observações e prescrições. | Segurança, Desempenho, Confiabilidade |
-| **Módulo de Pagamentos** | Registro de pagamentos de consultas e procedimentos. | Segurança, Confiabilidade, Manutenibilidade |
-| **Banco de Dados** | Persistência de todos os dados do sistema. | Segurança, Disponibilidade, Confiabilidade, Desempenho |
-| **Serviço de Processamento Assíncrono** | Tarefas não bloqueantes (notificações, relatórios). | Desempenho, Disponibilidade, Manutenibilidade |
+GET    /api/users
+POST   /api/users
+GET    /api/users/:id
+PUT    /api/users/:id
+GET    /api/roles
 
-> **Importante:** Os componentes acima destacados fazem parte do **Top 30% mais críticos** e serão detalhados internamente na próxima etapa do projeto.
+GET    /api/tutors
+POST   /api/tutors
+GET    /api/tutors/:id
+PUT    /api/tutors/:id
+DELETE /api/tutors/:id
 
----
+GET    /api/animals
+POST   /api/animals
+GET    /api/animals/:id
+PUT    /api/animals/:id
+DELETE /api/animals/:id
 
-## Protótipo do Sistema
+GET    /api/appointments
+POST   /api/appointments
+GET    /api/appointments/:id
+PUT    /api/appointments/:id
+POST   /api/appointments/:id/cancel
 
-Nesta seção, estão disponíveis as interfaces visuais do VetCare, desenvolvidas para validar a usabilidade e a experiência do usuário antes da implementação final. O protótipo navegável pode ser acessado através do link abaixo.
-
-**[Link para o Protótipo Navegável (Figma)](https://www.figma.com/design/RyttkdA9VockglJyTNJYqA/Sem-t%25C3%25ADtulo?node-id=1-3&t=sLbbEYodTy7TzK69-0)**
-
-### Tela de Login
-Interface de autenticação de usuários, contendo campos para e-mail/usuário e senha, além de opção de recuperação de senha.
-*(Substitua a imagem abaixo pelo print da tela de login)*
-![Tela de Login]([https://via.placeholder.com/800x450?text=Print+da+Tela+de+Login](https://www.figma.com/design/RyttkdA9VockglJyTNJYqA/Sem-t%C3%ADtulo?node-id=1-2&t=sLbbEYodTy7TzK69-1))
-
-### Tela de Cadastro de Usuário
-Interface para inclusão de novos usuários no sistema, contendo campos como nome, e-mail, perfil de acesso (Administrador, Recepcionista, Veterinário) e senha.
-*(Incluir a imagem abaixo pelo print da tela de cadastro)*
-![Tela de Cadastro de Usuário](https://via.placeholder.com/800x450?text=Print+da+Tela+de+Cadastro)
-
-> **Nota:** Outras telas do sistema (Agenda, Prontuário, Financeiro) podem ser adicionadas nesta seção conforme o avanço do projeto.
-
----
-
-## Documentação e Artefatos Externos
-
-Para centralizar e facilitar o acesso a todos os artefatos produzidos durante o desenvolvimento do projeto, os documentos complementares estão organizados na tabela abaixo:
-
-| Artefato | Descrição | Link de Acesso |
-| :--- | :--- | :--- |
-| **Documentação de Requisitos** | Documento completo com os requisitos funcionais e não funcionais do VetCare. | [Acessar Google Docs](https://docs.google.com/document/d/1Q5mlRNlOBcRVlrh8S1Xe0NLVUcPYFrlbgivGcqV6Myo/edit?tab=t.vslsqmnwl6d2) |
-| **Diagrama de Pacotes (UML)** | Diagrama visual da arquitetura de pacotes e dependências do sistema. | [Acessar Diagrama](https://docs.google.com/document/d/1Q5mlRNlOBcRVlrh8S1Xe0NLVUcPYFrlbgivGcqV6Myo/edit?tab=t.ubqouu4r2w0l) |
-| **Diagrama de Classes (UML)** | Modelagem das entidades e relacionamentos do domínio do sistema. | [Acessar Diagrama](https://link-do-diagrama-aqui.com) |
-| **Diagrama de Sequência (UML)** | Representação das interações entre os componentes para fluxos críticos. | [Acessar Diagrama](https://link-do-diagrama-aqui.com) |
-| **Protótipo Navegável** | Link direto para o protótipo interativo no Figma. | [Acessar Protótipo](https://link-do-prototipo-aqui.com) |
-
-> **Instruções:** Colocar os links de exemplo acima pelos URLs reais dos documentos da equipe.
+GET    /api/veterinarians
+GET    /api/veterinarians/:id/availability
+PUT    /api/veterinarians/:id/availability
+GET    /api/schedule
+GET    /api/veterinarian-dashboard
+```
 
 ---
 
-## Tecnologias Sugeridas
+## Como executar
 
-### Contexto Acadêmico
-- **Instituição:** Universidade Federal da Bahia (UFBA)
-- **Disciplina:** MATA62 - ENGENHARIA DE SOFTWARE I
-- **Semestre:** T02 (2026.2)
-- **Professor(a):** LARISSA BARBOSA LEONCIO PINHEIRO
-- **Trabalho:** Trabalho I – Arquitetura do Sistema VetCare (Etapa I)
-
----
-
-## Como executar a implementação
-
-Pré-requisitos: **Node.js >= 24** (necessário para `node:sqlite` sem flags experimentais).
+Pré-requisitos: **Node.js >= 24** — necessário para `node:sqlite` sem flags experimentais.
 
 1. Crie o arquivo de ambiente e defina a senha inicial do administrador:
-   ```bash
-   cp .env.example .env
-   # edite ADMIN_PASSWORD no .env
-   ```
+
+```bash
+cp .env.example .env
+# edite ADMIN_PASSWORD no .env
+```
+
 2. Instale as dependências:
-   ```bash
-   npm install
-   ```
-3. Inicie o banco e o servidor de desenvolvimento:
-   ```bash
-   npm run dev
-   ```
-   O Vite exibe a URL do frontend e encaminha `/api` para o servidor em `http://127.0.0.1:3001`.
 
-4. Para a versão de produção:
-   ```bash
-   npm run build
-   npm start
-   ```
+```bash
+npm install
+```
 
-O banco SQLite é criado em `data/vetcare.db` e o usuário administrador inicial é `admin@vetcare.com`. O arquivo `.env` e o diretório `data/` são ignorados pelo Git. Para redefinir a senha do administrador, atualize `ADMIN_PASSWORD` e execute `npm run db:seed`.
+3. Inicie o ambiente de desenvolvimento:
 
-Testes da API e do RBAC:
+```bash
+npm run dev
+```
+
+O Vite exibe a URL do frontend e encaminha `/api` para o servidor em `http://127.0.0.1:3001`.
+
+4. Para produção:
+
+```bash
+npm run build
+npm start
+```
+
+O banco SQLite é criado em `data/vetcare.db`. O arquivo `.env` e o diretório `data/` são ignorados pelo Git. Para redefinir a senha do administrador, atualize `ADMIN_PASSWORD` e execute:
+
+```bash
+npm run db:seed
+```
+
+---
+
+## Testes
+
 ```bash
 npm test
+npm run typecheck
+npm run build
 ```
+
+A suíte cobre autenticação, RBAC, usuários, tutores, animais, agendamentos, conflitos, cancelamento, disponibilidade, agenda semanal e dashboard do veterinário.
+
+---
+
+## Protótipo e Documentação
+
+- **Protótipo navegável:** [Figma](https://www.figma.com/design/RyttkdA9VockglJyTNJYqA/Sem-t%25C3%25ADtulo?node-id=1-3&t=sLbbEYodTy7TzK69-0)
+- **Documento de requisitos:** [Google Docs](https://docs.google.com/document/d/1Q5mlRNlOBcRVlrh8S1Xe0NLVUcPYFrlbgivGcqV6Myo/edit?tab=t.vslsqmnwl6d2)
+- **ADRs:** [documents/adrs](documents/adrs)
+- **Documentos da etapa:** [documents/requirements](documents/requirements)
+
+---
+
+## Próximos Passos
+
+1. Excluir usuários com proteção do último administrador.
+2. Adicionar visão dia/semana na agenda geral.
+3. Definir perfil profissional do veterinário com CRMV e especialidade.
+4. Implementar atendimento e prontuário clínico.
+5. Registrar vacinação e prescrições.
+6. Registrar pagamentos, dashboard financeiro e relatórios.
+7. Recuperar senha e notificar tutores.
+8. Adicionar CI, backup automatizado e E2E integrado à suíte.
+
+---
+
+## Contexto Acadêmico
+
+- **Instituição:** Universidade Federal da Bahia (UFBA)
+- **Disciplina:** MATA62 — Engenharia de Software I
+- **Semestre:** T02 (2026.2)
+- **Professor(a):** Larissa Barbosa Leôncio Pinheiro
+- **Trabalho:** Arquitetura do Sistema VetCare — Etapa I + implementação incremental
 
 ---
 
 ## Licença
 
-Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
-
----
-
-## Referências
-
-- [Documentação React](https://react.dev/)
-- [Documentação Node.js](https://nodejs.org/)
-- [Documentação PostgreSQL](https://www.postgresql.org/docs/)
-
+Este projeto está sob a licença MIT.
