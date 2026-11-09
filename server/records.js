@@ -102,7 +102,11 @@ function toHttpError(error, HttpError) {
     return new HttpError(404, error.code.toLowerCase(), error.message);
   }
 
-  if (error.code === "CPF_IN_USE" || error.code === "TUTOR_HAS_ANIMALS") {
+  if (
+    error.code === "CPF_IN_USE" ||
+    error.code === "TUTOR_HAS_ANIMALS" ||
+    error.code === "ANIMAL_HAS_APPOINTMENTS"
+  ) {
     return new HttpError(409, error.code.toLowerCase(), error.message);
   }
 

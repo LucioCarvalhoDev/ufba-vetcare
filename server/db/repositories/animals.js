@@ -41,6 +41,9 @@ export function createAnimalsRepository(connection) {
   const deleteAnimalStatement = connection.prepare(
     "DELETE FROM animals WHERE id = ?",
   );
+  const countAppointments = connection.prepare(
+    "SELECT COUNT(*) AS total FROM appointments WHERE animal_id = ?",
+  );
 
   function getAnimalById(id) {
     const row = selectAnimalById.get(id);
@@ -224,6 +227,13 @@ export function createAnimalsRepository(connection) {
     deleteAnimal(id) {
       if (!selectAnimalRowById.get(id)) {
         throw domainError("ANIMAL_NOT_FOUND", "Animal não encontrado.");
+      }
+
+      if (countAppointments.get(id).total > 0) {
+        throw domainError(
+          "ANIMAL_HAS_APPOINTMENTS",
+          "Não é possível excluir um animal com agendamentos vinculados.",
+        );
       }
 
       deleteAnimalStatement.run(id);

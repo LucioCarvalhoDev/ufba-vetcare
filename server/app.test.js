@@ -973,6 +973,15 @@ test("API de agendamentos cobre CRUD, conflito, cancelamento e auditoria", async
   const anonymous = await fetch(`${baseUrl}/api/appointments`);
   assert.equal(anonymous.status, 401);
 
+  const blockedAnimalDelete = await fetch(
+    `${baseUrl}/api/animals/${animal.id}`,
+    { method: "DELETE", headers: { cookie: adminCookie } },
+  );
+  const blockedAnimalBody = await blockedAnimalDelete.json();
+
+  assert.equal(blockedAnimalDelete.status, 409);
+  assert.equal(blockedAnimalBody.error.code, "animal_has_appointments");
+
   const auditActions = database.connection
     .prepare(
       `SELECT DISTINCT action
