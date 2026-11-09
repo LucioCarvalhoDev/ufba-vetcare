@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { getFirstName, getInitials } from "../lib/format";
 import { Link, usePathname } from "../lib/navigation";
+import { APP_VERSION } from "../lib/version";
 import type { AuthUser } from "../types/auth";
 import "./AppShell.css";
 
@@ -335,7 +336,7 @@ export default function AppShell({
         </nav>
 
         <div className="sidebar__footer">
-          <span>VetCare v1.0</span>
+          <span>VetCare v{APP_VERSION}</span>
           <button
             className="sidebar__logout"
             type="button"

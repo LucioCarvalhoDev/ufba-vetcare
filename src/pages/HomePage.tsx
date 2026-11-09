@@ -1,3 +1,5 @@
+import { APP_VERSION } from "../lib/version";
+
 type NotificationTone = "blue" | "green" | "amber" | "red";
 
 type NotificationItem = {
@@ -141,7 +143,7 @@ export default function HomePage() {
           <header className="card__header">
             <div className="card__heading">
               <h2 id="updates-title">Notas da Atualização</h2>
-              <span className="badge">v1.0</span>
+              <span className="badge">v{APP_VERSION}</span>
             </div>
           </header>
 

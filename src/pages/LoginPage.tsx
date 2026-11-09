@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { login } from "../lib/api";
+import { APP_VERSION } from "../lib/version";
 import type { AuthUser } from "../types/auth";
 import "./LoginPage.css";
 
@@ -142,7 +143,7 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
 
         <footer className="login__footer">
           <p>
-            VetCare v1.0{" "}
+            VetCare v{APP_VERSION}{" "}
             <span className="login__footer-separator" aria-hidden="true">
               •
             </span>{" "}
