@@ -1,0 +1,336 @@
+.login {
+  display: grid;
+  grid-template-columns: minmax(0, 690fr) minmax(0, 750fr);
+  min-height: 100svh;
+  background: var(--vetcare-surface);
+}
+
+.login__brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: clamp(40px, 11.46vh, 110px) clamp(24px, 6.6vw, 95px)
+    clamp(40px, 6vh, 64px);
+  background: var(--vetcare-green-900);
+  color: #fff;
+}
+
+.brand {
+  width: 100%;
+  max-width: 440px;
+}
+
+.brand__logo {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: var(--vetcare-green-400);
+  color: #fff;
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.brand__title {
+  margin: 34px 0 0;
+  color: #fff;
+  font-size: clamp(2.25rem, 3.06vw, 2.75rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+}
+
+.brand__tagline {
+  margin: 18px 0 0;
+  color: var(--vetcare-mint-200);
+  font-size: clamp(1.25rem, 1.67vw, 1.5rem);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.34;
+}
+
+.brand__support {
+  margin: 46px 0 0;
+  color: var(--vetcare-mint-300);
+  font-size: clamp(1rem, 1.25vw, 1.125rem);
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.login__main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: clamp(48px, 17.6vh, 169px) clamp(24px, 4vw, 64px) 0;
+  background: var(--vetcare-surface);
+}
+
+.login__panel {
+  width: 100%;
+  max-width: 520px;
+}
+
+.login__title {
+  margin: 0;
+  color: var(--vetcare-ink);
+  font-size: clamp(1.75rem, 2.36vw, 2.125rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+.login__subtitle {
+  margin: 6px 0 0;
+  color: var(--vetcare-muted);
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.375;
+}
+
+.login__form {
+  display: flex;
+  flex-direction: column;
+  margin-top: 52px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+}
+
+.field + .field {
+  margin-top: 31px;
+}
+
+.field__label {
+  margin-bottom: 7px;
+  color: var(--vetcare-body);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.field__input {
+  width: 100%;
+  height: 43px;
+  padding: 0 13px;
+  border: 1px solid var(--vetcare-border);
+  border-radius: 8.5px;
+  background: #fff;
+  color: var(--vetcare-ink);
+  font-size: 0.9375rem;
+  line-height: 1;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.field__input::placeholder {
+  color: var(--vetcare-placeholder);
+  opacity: 1;
+}
+
+.field__input:hover {
+  border-color: #b9cbc6;
+}
+
+.field__input:focus {
+  border-color: var(--vetcare-green-700);
+  box-shadow: 0 0 0 3px rgb(20 122 107 / 14%);
+  outline: none;
+}
+
+.field__action {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding-right: 33px;
+}
+
+.forgot-link {
+  border-radius: 4px;
+  color: var(--vetcare-green-600);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-decoration: none;
+}
+
+.forgot-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.submit-button {
+  width: 100%;
+  height: 54px;
+  margin-top: 32px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--vetcare-green-700);
+  color: #fff;
+  cursor: pointer;
+  padding: 0 17px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1;
+  text-align: left;
+  transition:
+    background-color 150ms ease,
+    transform 150ms ease;
+}
+
+.submit-button:hover {
+  background: var(--vetcare-green-600);
+}
+
+.submit-button:active {
+  transform: translateY(1px);
+}
+
+.submit-button:focus-visible {
+  box-shadow: 0 0 0 4px rgb(20 122 107 / 28%);
+  outline: none;
+}
+
+.access-note {
+  margin: 25px 0 0;
+  padding-left: 40px;
+  color: var(--vetcare-note);
+  font-size: 0.875rem;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.login__footer {
+  width: 100%;
+  max-width: 520px;
+  margin: auto auto 0;
+  padding-bottom: 46px;
+}
+
+.login__footer p {
+  margin: 0;
+  color: var(--vetcare-footer);
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.login__footer-separator {
+  margin-inline: 2px;
+}
+
+:focus-visible {
+  outline: 3px solid rgb(20 122 107 / 35%);
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .login {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+  }
+
+  .login__brand {
+    padding: 40px 24px 36px;
+  }
+
+  .brand__title {
+    margin-top: 28px;
+    font-size: 2.25rem;
+  }
+
+  .brand__tagline {
+    margin-top: 18px;
+    font-size: 1.25rem;
+  }
+
+  .brand__support {
+    margin-top: 28px;
+    font-size: 1rem;
+  }
+
+  .login__main {
+    padding-top: 48px;
+    padding-inline: 24px;
+  }
+
+  .login__title {
+    font-size: 1.75rem;
+  }
+
+  .login__footer {
+    margin-top: 48px;
+    padding-bottom: 28px;
+  }
+}
+
+@media (max-width: 480px) {
+  .login__brand {
+    padding: 32px 20px 30px;
+  }
+
+  .brand__logo {
+    width: 56px;
+    height: 56px;
+    border-radius: 18px;
+    font-size: 33px;
+  }
+
+  .brand__title {
+    margin-top: 22px;
+    font-size: 2rem;
+  }
+
+  .brand__tagline {
+    margin-top: 14px;
+    font-size: 1.125rem;
+  }
+
+  .brand__support {
+    margin-top: 22px;
+  }
+
+  .login__main {
+    padding-top: 40px;
+    padding-inline: 20px;
+  }
+
+  .login__title {
+    font-size: 1.625rem;
+  }
+
+  .login__form {
+    margin-top: 36px;
+  }
+
+  .login__footer {
+    padding-bottom: 24px;
+  }
+}
+
+.login__error {
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  border: 1px solid #e7b9b9;
+  border-radius: 8px;
+  background: #fdf3f3;
+  color: #8c2f2f;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.submit-button:disabled {
+  cursor: progress;
+  opacity: 0.82;
+}
+
+.submit-button:disabled:hover {
+  background: var(--vetcare-green-700);
+}
+
+.submit-button:disabled:active {
+  transform: none;
+}

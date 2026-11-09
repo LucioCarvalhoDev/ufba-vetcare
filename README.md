@@ -8,20 +8,6 @@
 
 ---
 
-## Sumário
-
-- [Sobre o Projeto](#-sobre-o-projeto)
-- [Características Arquiteturais](#-características-arquiteturais)
-- [Arquitetura do Sistema](#-arquitetura-do-sistema)
-- [Componentes Candidatos](#-componentes-candidatos)
-- [Protótipo do Sistema](#-protótipo-do-sistema)
-- [Documentação e Artefatos Externos](#-documentação-e-artefatos-externos)
-- [Tecnologias Sugeridas](#-tecnologias-sugeridas)
-- [Equipe](#-equipe)
-- [Licença](#-licença)
-
----
-
 ## Sobre o Projeto
 
 Este repositório contém a **documentação arquitetural** e os artefatos de modelagem do **VetCare**, um sistema de software desenvolvido como parte da disciplina de **Engenharia de Software** da **Universidade Federal da Bahia (UFBA)**. 
@@ -160,33 +146,46 @@ Para centralizar e facilitar o acesso a todos os artefatos produzidos durante o 
 
 ## Tecnologias Sugeridas
 
-| Tecnologia | Descrição |
-|-----------|-----------|
-| [React](https://react.dev/) | Biblioteca para construção de interfaces (Frontend) |
-| [Node.js](https://nodejs.org/) | Ambiente de execução para o Backend |
-| [PostgreSQL](https://www.postgresql.org/) | Banco de dados relacional (Confiabilidade e Integridade) |
-| [Redis](https://redis.io/) | Cache em memória para alto desempenho |
-| [RabbitMQ](https://www.rabbitmq.com/) / [Kafka](https://kafka.apache.org/) | Mensageria e processamento assíncrono |
-| [Docker](https://www.docker.com/) | Containerização e padronização de ambientes |
-| [Figma](https://www.figma.com/) | Prototipação de interfaces e design |
-
----
-
-## Equipe
-
-### Grupo de Desenvolvimento
-| Nome | GitHub | Função |
-|------|--------|--------|
-| [Nome 1] | [@usuario1](https://github.com/usuario1) | Arquiteto(a) de Software |
-| [Nome 2] | [@usuario2](https://github.com/usuario2) | Desenvolvedor(a) / Documentador(a) |
-| [Nome 3] | [@usuario3](https://github.com/usuario3) | Desenvolvedor(a) / Documentador(a) |
-
 ### Contexto Acadêmico
 - **Instituição:** Universidade Federal da Bahia (UFBA)
 - **Disciplina:** MATA62 - ENGENHARIA DE SOFTWARE I
 - **Semestre:** T02 (2026.2)
 - **Professor(a):** LARISSA BARBOSA LEONCIO PINHEIRO
 - **Trabalho:** Trabalho I – Arquitetura do Sistema VetCare (Etapa I)
+
+---
+
+## Como executar a implementação
+
+Pré-requisitos: **Node.js >= 24** (necessário para `node:sqlite` sem flags experimentais).
+
+1. Crie o arquivo de ambiente e defina a senha inicial do administrador:
+   ```bash
+   cp .env.example .env
+   # edite ADMIN_PASSWORD no .env
+   ```
+2. Instale as dependências:
+   ```bash
+   npm install
+   ```
+3. Inicie o banco e o servidor de desenvolvimento:
+   ```bash
+   npm run dev
+   ```
+   O Vite exibe a URL do frontend e encaminha `/api` para o servidor em `http://127.0.0.1:3001`.
+
+4. Para a versão de produção:
+   ```bash
+   npm run build
+   npm start
+   ```
+
+O banco SQLite é criado em `data/vetcare.db` e o usuário administrador inicial é `admin@vetcare.com`. O arquivo `.env` e o diretório `data/` são ignorados pelo Git. Para redefinir a senha do administrador, atualize `ADMIN_PASSWORD` e execute `npm run db:seed`.
+
+Testes da API e do RBAC:
+```bash
+npm test
+```
 
 ---
 
@@ -202,8 +201,3 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 - [Documentação Node.js](https://nodejs.org/)
 - [Documentação PostgreSQL](https://www.postgresql.org/docs/)
 
----
-
-<p align="center">
-  Desenvolvido com 💙 para a disciplina de <strong>Engenharia de Software - UFBA</strong>
-</p>
