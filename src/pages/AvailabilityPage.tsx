@@ -10,6 +10,7 @@ import {
   updateVeterinarianAvailability,
 } from "../lib/api";
 import { Link } from "../lib/navigation";
+import { STANDARD_TIME_SLOTS, TIME_SLOTS } from "../lib/schedule";
 import { useFlashMessage } from "../lib/useFlashMessage";
 import type { AuthUser } from "../types/auth";
 import type {
@@ -34,14 +35,6 @@ const DAYS = [
   { value: 6, short: "Sáb", long: "sábado" },
   { value: 7, short: "Dom", long: "domingo" },
 ];
-
-const TIME_SLOTS = Array.from({ length: 48 }, (_, index) => {
-  const minutes = index * 30;
-  const hours = String(Math.floor(minutes / 60)).padStart(2, "0");
-  const rest = String(minutes % 60).padStart(2, "0");
-
-  return { minutes, label: `${hours}:${rest}` };
-});
 
 function slotKey(weekday: number, startMinutes: number) {
   return `${weekday}:${startMinutes}`;
@@ -79,6 +72,7 @@ export default function AvailabilityPage({
   const [isSaving, setIsSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [showNonStandard, setShowNonStandard] = useState(false);
   const [flash, setFlash] = useFlashMessage();
   const dragRef = useRef<{
     targetSelected: boolean;
@@ -330,6 +324,9 @@ export default function AvailabilityPage({
   }
 
   const isDirty = !sameSet(selected, initial);
+  const visibleTimeSlots = showNonStandard
+    ? TIME_SLOTS
+    : STANDARD_TIME_SLOTS;
 
   return (
     <div className="availability-page">
@@ -381,6 +378,22 @@ export default function AvailabilityPage({
           </span>
         </header>
 
+        <div className="availability-toolbar">
+          <span className="availability-toolbar__range">
+            Horário padrão: 07:00–18:00
+          </span>
+          <label className="schedule-toggle">
+            <input
+              type="checkbox"
+              role="switch"
+              checked={showNonStandard}
+              onChange={(event) => setShowNonStandard(event.target.checked)}
+            />
+            <span className="schedule-toggle__track" aria-hidden="true" />
+            <span className="schedule-toggle__label">Horários não padrão</span>
+          </label>
+        </div>
+
         <div className="availability-scroll">
           <table
             className="availability-table"
@@ -399,7 +412,7 @@ export default function AvailabilityPage({
               </tr>
             </thead>
             <tbody>
-              {TIME_SLOTS.map((slot) => (
+              {visibleTimeSlots.map((slot) => (
                 <tr key={slot.minutes}>
                   <th scope="row">{slot.label}</th>
                   {DAYS.map((day) => {

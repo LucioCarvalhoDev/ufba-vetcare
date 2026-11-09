@@ -7,6 +7,7 @@ import type {
   ScheduleStatus,
   ScheduleWeek,
 } from "../types/appointments";
+import { STANDARD_TIME_SLOTS, TIME_SLOTS } from "../lib/schedule";
 import "../pages/AvailabilityPage.css";
 
 type ScheduleGridProps = {
@@ -45,20 +46,6 @@ const WEEKDAY_LABELS: Record<number, string> = {
   7: "Dom",
 };
 
-const TIME_SLOTS = Array.from({ length: 48 }, (_, index) => {
-  const minutes = index * 30;
-  const hours = String(Math.floor(minutes / 60)).padStart(2, "0");
-  const rest = String(minutes % 60).padStart(2, "0");
-
-  return { minutes, label: `${hours}:${rest}` };
-});
-
-const STANDARD_START = 7 * 60;
-const STANDARD_END = 18 * 60;
-const STANDARD_SLOTS = TIME_SLOTS.filter(
-  (slot) => slot.minutes >= STANDARD_START && slot.minutes < STANDARD_END,
-);
-
 const STATUS_LABELS: Record<ScheduleStatus, string> = {
   free: "horário livre",
   busy: "sem médicos livres",
@@ -84,7 +71,9 @@ export default function ScheduleGrid({
   onClick,
 }: ScheduleGridProps) {
   const [showNonStandard, setShowNonStandard] = useState(false);
-  const visibleTimeSlots = showNonStandard ? TIME_SLOTS : STANDARD_SLOTS;
+  const visibleTimeSlots = showNonStandard
+    ? TIME_SLOTS
+    : STANDARD_TIME_SLOTS;
 
   return (
     <section className="availability-card schedule-card">
