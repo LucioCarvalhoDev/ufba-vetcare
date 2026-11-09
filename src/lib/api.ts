@@ -17,6 +17,7 @@ import type {
   Tutor,
   TutorInput,
 } from "../types/registry";
+import type { DashboardQuery, VeterinarianDashboard } from "../types/dashboard";
 import type {
   Appointment,
   AppointmentFilters,
@@ -393,4 +394,18 @@ export async function fetchSchedule(from: string): Promise<ScheduleWeek> {
   return request<ScheduleWeek>(`/schedule?${params.toString()}`, {
     method: "GET",
   });
+}
+
+export async function fetchVeterinarianDashboard(
+  query: DashboardQuery = {},
+): Promise<VeterinarianDashboard> {
+  const params = new URLSearchParams();
+  if (query.date) params.set("date", query.date);
+  if (query.month) params.set("month", query.month);
+  const search = params.toString();
+
+  return request<VeterinarianDashboard>(
+    `/veterinarian-dashboard${search ? `?${search}` : ""}`,
+    { method: "GET" },
+  );
 }

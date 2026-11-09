@@ -11,6 +11,7 @@ import TutorsListPage from "./pages/TutorsListPage";
 import LoginPage from "./pages/LoginPage";
 import UserFormPage from "./pages/UserFormPage";
 import UsersListPage from "./pages/UsersListPage";
+import VeterinarianDashboardPage from "./pages/VeterinarianDashboardPage";
 import { fetchCurrentUser, logout } from "./lib/api";
 import { navigate, usePathname } from "./lib/navigation";
 import type { AuthUser } from "./types/auth";
@@ -46,6 +47,16 @@ export default function App() {
     };
   }, []);
 
+  function handleAuthenticated(authenticatedUser: AuthUser) {
+    setUser(authenticatedUser);
+
+    if (
+      authenticatedUser.roles.some((role) => role.slug === "veterinario")
+    ) {
+      navigate("/minha-agenda");
+    }
+  }
+
   async function handleLogout() {
     setIsLoggingOut(true);
 
@@ -69,7 +80,21 @@ export default function App() {
   }
 
   if (!user) {
-    return <LoginPage onAuthenticated={setUser} />;
+    return <LoginPage onAuthenticated={handleAuthenticated} />;
+  }
+
+  if (pathname === "/minha-agenda") {
+    return (
+      <AppShell
+        user={user}
+        title="Minha Agenda"
+        activeNav="minhaAgenda"
+        isLoggingOut={isLoggingOut}
+        onLogout={handleLogout}
+      >
+        <VeterinarianDashboardPage user={user} />
+      </AppShell>
+    );
   }
 
   if (pathname === "/agenda") {

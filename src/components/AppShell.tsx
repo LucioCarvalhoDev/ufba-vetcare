@@ -7,7 +7,13 @@ import "./AppShell.css";
 type AppShellProps = {
   user: AuthUser;
   title: string;
-  activeNav: "inicio" | "agenda" | "tutores" | "pets" | "usuarios";
+  activeNav:
+    | "inicio"
+    | "agenda"
+    | "minhaAgenda"
+    | "tutores"
+    | "pets"
+    | "usuarios";
   isLoggingOut: boolean;
   onLogout: () => Promise<void>;
   children: ReactNode;
@@ -19,10 +25,19 @@ type NavItem = {
   icon: string;
   to?: string;
   permission?: string;
+  roles?: string[];
 };
 
 const NAV_ITEMS: NavItem[] = [
   { key: "inicio", label: "Início", icon: "I", to: "/" },
+  {
+    key: "minhaAgenda",
+    label: "Minha Agenda",
+    icon: "M",
+    to: "/minha-agenda",
+    permission: "appointments.read",
+    roles: ["veterinario"],
+  },
   {
     key: "agenda",
     label: "Agenda",
@@ -129,9 +144,22 @@ export default function AppShell({
   const menuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const isLeaving = isLoggingOut || isSubmittingLogout;
-  const visibleItems = NAV_ITEMS.filter(
-    (item) => !item.permission || user.permissions.includes(item.permission),
-  );
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    if (item.permission && !user.permissions.includes(item.permission)) {
+      return false;
+    }
+
+    if (
+      item.roles &&
+      !item.roles.some((roleSlug) =>
+        user.roles.some((role) => role.slug === roleSlug),
+      )
+    ) {
+      return false;
+    }
+
+    return true;
+  });
   const firstName = getFirstName(user.name);
   const roleLabel =
     user.roles.map((role) => role.name).join(" • ") || "Usuário";
