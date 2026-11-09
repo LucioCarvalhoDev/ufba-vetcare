@@ -43,6 +43,33 @@ CREATE TABLE IF NOT EXISTS role_permissions (
   PRIMARY KEY (role_id, permission_id)
 );
 
+CREATE TABLE IF NOT EXISTS tutors (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  cpf TEXT UNIQUE,
+  email TEXT,
+  phone TEXT,
+  address TEXT,
+  notes TEXT,
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS animals (
+  id TEXT PRIMARY KEY,
+  tutor_id TEXT NOT NULL REFERENCES tutors(id) ON DELETE RESTRICT,
+  name TEXT NOT NULL,
+  species TEXT NOT NULL,
+  breed TEXT,
+  sex TEXT NOT NULL DEFAULT 'unknown' CHECK (sex IN ('male', 'female', 'unknown')),
+  birth_date TEXT,
+  notes TEXT,
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -73,6 +100,10 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_tutors_name ON tutors(name);
+CREATE INDEX IF NOT EXISTS idx_tutors_cpf ON tutors(cpf);
+CREATE INDEX IF NOT EXISTS idx_animals_tutor_id ON animals(tutor_id);
+CREATE INDEX IF NOT EXISTS idx_animals_name ON animals(name);
 `;
 
 function nowIso() {
@@ -85,6 +116,94 @@ function normalizeEmail(email) {
 
 function escapeLike(value) {
   return String(value).replace(/[\\%_]/g, "\\$&");
+}
+
+function domainError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function optionalText(value) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  const text = String(value).trim();
+  return text.length > 0 ? text : null;
+}
+
+function normalizeSex(value, fallback = "unknown") {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+
+  if (!["male", "female", "unknown"].includes(normalized)) {
+    throw domainError(
+      "INVALID_SEX",
+      "Sexo inválido. Use male, female ou unknown.",
+    );
+  }
+
+  return normalized;
+}
+
+function normalizeBirthDate(value) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const text = String(value).trim();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    throw domainError(
+      "INVALID_BIRTH_DATE",
+      "Data de nascimento deve estar no formato AAAA-MM-DD.",
+    );
+  }
+
+  const date = new Date(`${text}T00:00:00.000Z`);
+
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== text) {
+    throw domainError("INVALID_BIRTH_DATE", "Data de nascimento inválida.");
+  }
+
+  return text;
+}
+
+function mapTutorRow(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    cpf: row.cpf,
+    email: row.email,
+    phone: row.phone,
+    address: row.address,
+    notes: row.notes,
+    isActive: Boolean(row.is_active),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    animalCount: Number(row.animal_count ?? 0),
+  };
+}
+
+function mapAnimalRow(row) {
+  return {
+    id: row.id,
+    tutorId: row.tutor_id,
+    tutorName: row.tutor_name,
+    name: row.name,
+    species: row.species,
+    breed: row.breed,
+    sex: row.sex,
+    birthDate: row.birth_date,
+    notes: row.notes,
+    isActive: Boolean(row.is_active),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 /**
@@ -704,6 +823,478 @@ export async function openDatabase({
       }
 
       return database.getUserAuthById(id);
+    },
+
+    /**
+     * Lista tutores com busca por nome, CPF, e-mail ou telefone.
+     *
+     * @param {{
+     *   q?: string,
+     *   isActive?: boolean,
+     * }} [filters]
+     */
+    listTutors({ q = "", isActive } = {}) {
+      const conditions = [];
+      const parameters = [];
+      const search = String(q ?? "").trim();
+
+      if (search) {
+        const term = `%${escapeLike(search)}%`;
+        conditions.push(
+          `(t.name LIKE ? ESCAPE '\\'
+            OR t.cpf LIKE ? ESCAPE '\\'
+            OR t.email LIKE ? ESCAPE '\\'
+            OR t.phone LIKE ? ESCAPE '\\')`,
+        );
+        parameters.push(term, term, term, term);
+      }
+
+      if (typeof isActive === "boolean") {
+        conditions.push("t.is_active = ?");
+        parameters.push(isActive ? 1 : 0);
+      }
+
+      const where = conditions.length
+        ? `WHERE ${conditions.join(" AND ")}`
+        : "";
+      const rows = connection
+        .prepare(
+          `SELECT t.*,
+                  (SELECT COUNT(*) FROM animals a WHERE a.tutor_id = t.id) AS animal_count
+           FROM tutors t
+           ${where}
+           ORDER BY t.name COLLATE NOCASE ASC, t.created_at ASC`,
+        )
+        .all(...parameters);
+
+      return rows.map(mapTutorRow);
+    },
+
+    /**
+     * @param {string} id
+     */
+    getTutorById(id) {
+      const row = connection
+        .prepare(
+          `SELECT t.*,
+                  (SELECT COUNT(*) FROM animals a WHERE a.tutor_id = t.id) AS animal_count
+           FROM tutors t
+           WHERE t.id = ?`,
+        )
+        .get(id);
+
+      return row ? mapTutorRow(row) : null;
+    },
+
+    /**
+     * @param {{
+     *   name: string,
+     *   cpf?: string | null,
+     *   email?: string | null,
+     *   phone?: string | null,
+     *   address?: string | null,
+     *   notes?: string | null,
+     *   isActive?: boolean,
+     * }} input
+     */
+    createTutor({
+      name,
+      cpf = null,
+      email = null,
+      phone = null,
+      address = null,
+      notes = null,
+      isActive = true,
+    }) {
+      const normalizedName = String(name ?? "").trim();
+
+      if (!normalizedName) {
+        throw domainError("INVALID_NAME", "Nome do tutor é obrigatório.");
+      }
+
+      const normalizedCpf = optionalText(cpf);
+
+      if (
+        normalizedCpf &&
+        connection.prepare("SELECT id FROM tutors WHERE cpf = ?").get(normalizedCpf)
+      ) {
+        throw domainError("CPF_IN_USE", "Já existe um tutor com este CPF.");
+      }
+
+      const id = randomUUID();
+      const timestamp = nowIso();
+
+      connection
+        .prepare(
+          `INSERT INTO tutors
+             (id, name, cpf, email, phone, address, notes, is_active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          normalizedName,
+          normalizedCpf,
+          optionalText(email),
+          optionalText(phone),
+          optionalText(address),
+          optionalText(notes),
+          isActive === false ? 0 : 1,
+          timestamp,
+          timestamp,
+        );
+
+      return database.getTutorById(id);
+    },
+
+    /**
+     * Atualiza apenas os campos informados.
+     *
+     * @param {string} id
+     * @param {{
+     *   name?: string,
+     *   cpf?: string | null,
+     *   email?: string | null,
+     *   phone?: string | null,
+     *   address?: string | null,
+     *   notes?: string | null,
+     *   isActive?: boolean,
+     * }} [data]
+     */
+    updateTutor(id, data = {}) {
+      const input = data ?? {};
+      const existing = connection
+        .prepare("SELECT * FROM tutors WHERE id = ?")
+        .get(id);
+
+      if (!existing) {
+        throw domainError("TUTOR_NOT_FOUND", "Tutor não encontrado.");
+      }
+
+      const has = (key) => Object.prototype.hasOwnProperty.call(input, key);
+      const normalizedName = has("name")
+        ? String(input.name ?? "").trim()
+        : existing.name;
+
+      if (!normalizedName) {
+        throw domainError("INVALID_NAME", "Nome do tutor é obrigatório.");
+      }
+
+      const normalizedCpf = has("cpf")
+        ? optionalText(input.cpf)
+        : existing.cpf;
+
+      if (normalizedCpf) {
+        const owner = connection
+          .prepare("SELECT id FROM tutors WHERE cpf = ?")
+          .get(normalizedCpf);
+
+        if (owner && owner.id !== id) {
+          throw domainError("CPF_IN_USE", "Já existe um tutor com este CPF.");
+        }
+      }
+
+      const isActive =
+        typeof input.isActive === "boolean"
+          ? input.isActive
+            ? 1
+            : 0
+          : existing.is_active;
+
+      connection
+        .prepare(
+          `UPDATE tutors
+           SET name = ?, cpf = ?, email = ?, phone = ?, address = ?, notes = ?,
+               is_active = ?, updated_at = ?
+           WHERE id = ?`,
+        )
+        .run(
+          normalizedName,
+          normalizedCpf,
+          has("email") ? optionalText(input.email) : existing.email,
+          has("phone") ? optionalText(input.phone) : existing.phone,
+          has("address") ? optionalText(input.address) : existing.address,
+          has("notes") ? optionalText(input.notes) : existing.notes,
+          isActive,
+          nowIso(),
+          id,
+        );
+
+      return database.getTutorById(id);
+    },
+
+    /**
+     * Exclui um tutor somente quando ele não possui animais vinculados.
+     *
+     * @param {string} id
+     */
+    deleteTutor(id) {
+      const existing = connection
+        .prepare("SELECT id FROM tutors WHERE id = ?")
+        .get(id);
+
+      if (!existing) {
+        throw domainError("TUTOR_NOT_FOUND", "Tutor não encontrado.");
+      }
+
+      const animalCount = connection
+        .prepare("SELECT COUNT(*) AS total FROM animals WHERE tutor_id = ?")
+        .get(id).total;
+
+      if (animalCount > 0) {
+        throw domainError(
+          "TUTOR_HAS_ANIMALS",
+          "Não é possível excluir um tutor com animais vinculados.",
+        );
+      }
+
+      connection.prepare("DELETE FROM tutors WHERE id = ?").run(id);
+      return true;
+    },
+
+    /**
+     * Lista animais com filtros por nome/raça, tutor, espécie e situação.
+     *
+     * @param {{
+     *   q?: string,
+     *   tutorId?: string,
+     *   species?: string,
+     *   isActive?: boolean,
+     * }} [filters]
+     */
+    listAnimals({ q = "", tutorId = "", species = "", isActive } = {}) {
+      const conditions = [];
+      const parameters = [];
+      const search = String(q ?? "").trim();
+
+      if (search) {
+        const term = `%${escapeLike(search)}%`;
+        conditions.push(
+          `(a.name LIKE ? ESCAPE '\\' OR a.breed LIKE ? ESCAPE '\\')`,
+        );
+        parameters.push(term, term);
+      }
+
+      if (tutorId) {
+        conditions.push("a.tutor_id = ?");
+        parameters.push(tutorId);
+      }
+
+      if (species) {
+        conditions.push("a.species = ? COLLATE NOCASE");
+        parameters.push(String(species).trim());
+      }
+
+      if (typeof isActive === "boolean") {
+        conditions.push("a.is_active = ?");
+        parameters.push(isActive ? 1 : 0);
+      }
+
+      const where = conditions.length
+        ? `WHERE ${conditions.join(" AND ")}`
+        : "";
+      const rows = connection
+        .prepare(
+          `SELECT a.*, t.name AS tutor_name
+           FROM animals a
+           INNER JOIN tutors t ON t.id = a.tutor_id
+           ${where}
+           ORDER BY a.name COLLATE NOCASE ASC, a.created_at ASC`,
+        )
+        .all(...parameters);
+
+      return rows.map(mapAnimalRow);
+    },
+
+    /**
+     * @param {string} id
+     */
+    getAnimalById(id) {
+      const row = connection
+        .prepare(
+          `SELECT a.*, t.name AS tutor_name
+           FROM animals a
+           INNER JOIN tutors t ON t.id = a.tutor_id
+           WHERE a.id = ?`,
+        )
+        .get(id);
+
+      return row ? mapAnimalRow(row) : null;
+    },
+
+    /**
+     * @param {{
+     *   tutorId: string,
+     *   name: string,
+     *   species: string,
+     *   breed?: string | null,
+     *   sex?: "male" | "female" | "unknown",
+     *   birthDate?: string | null,
+     *   notes?: string | null,
+     *   isActive?: boolean,
+     * }} input
+     */
+    createAnimal({
+      tutorId,
+      name,
+      species,
+      breed = null,
+      sex = "unknown",
+      birthDate = null,
+      notes = null,
+      isActive = true,
+    }) {
+      const normalizedTutorId = String(tutorId ?? "").trim();
+      const tutor = normalizedTutorId
+        ? connection
+            .prepare("SELECT id FROM tutors WHERE id = ?")
+            .get(normalizedTutorId)
+        : null;
+
+      if (!tutor) {
+        throw domainError("TUTOR_NOT_FOUND", "Tutor não encontrado.");
+      }
+
+      const normalizedName = String(name ?? "").trim();
+      const normalizedSpecies = String(species ?? "").trim();
+
+      if (!normalizedName) {
+        throw domainError("INVALID_NAME", "Nome do animal é obrigatório.");
+      }
+
+      if (!normalizedSpecies) {
+        throw domainError("INVALID_SPECIES", "Espécie do animal é obrigatória.");
+      }
+
+      const normalizedSex = normalizeSex(sex);
+      const normalizedBirthDate = normalizeBirthDate(birthDate);
+      const id = randomUUID();
+      const timestamp = nowIso();
+
+      connection
+        .prepare(
+          `INSERT INTO animals
+             (id, tutor_id, name, species, breed, sex, birth_date, notes, is_active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          normalizedTutorId,
+          normalizedName,
+          normalizedSpecies,
+          optionalText(breed),
+          normalizedSex,
+          normalizedBirthDate,
+          optionalText(notes),
+          isActive === false ? 0 : 1,
+          timestamp,
+          timestamp,
+        );
+
+      return database.getAnimalById(id);
+    },
+
+    /**
+     * Atualiza apenas os campos informados.
+     *
+     * @param {string} id
+     * @param {{
+     *   tutorId?: string,
+     *   name?: string,
+     *   species?: string,
+     *   breed?: string | null,
+     *   sex?: "male" | "female" | "unknown",
+     *   birthDate?: string | null,
+     *   notes?: string | null,
+     *   isActive?: boolean,
+     * }} [data]
+     */
+    updateAnimal(id, data = {}) {
+      const input = data ?? {};
+      const existing = connection
+        .prepare("SELECT * FROM animals WHERE id = ?")
+        .get(id);
+
+      if (!existing) {
+        throw domainError("ANIMAL_NOT_FOUND", "Animal não encontrado.");
+      }
+
+      const has = (key) => Object.prototype.hasOwnProperty.call(input, key);
+      const tutorId = has("tutorId")
+        ? String(input.tutorId ?? "").trim()
+        : existing.tutor_id;
+      const tutor = tutorId
+        ? connection.prepare("SELECT id FROM tutors WHERE id = ?").get(tutorId)
+        : null;
+
+      if (!tutor) {
+        throw domainError("TUTOR_NOT_FOUND", "Tutor não encontrado.");
+      }
+
+      const normalizedName = has("name")
+        ? String(input.name ?? "").trim()
+        : existing.name;
+      const normalizedSpecies = has("species")
+        ? String(input.species ?? "").trim()
+        : existing.species;
+
+      if (!normalizedName) {
+        throw domainError("INVALID_NAME", "Nome do animal é obrigatório.");
+      }
+
+      if (!normalizedSpecies) {
+        throw domainError("INVALID_SPECIES", "Espécie do animal é obrigatória.");
+      }
+
+      const normalizedSex = has("sex")
+        ? normalizeSex(input.sex, existing.sex)
+        : existing.sex;
+      const normalizedBirthDate = has("birthDate")
+        ? normalizeBirthDate(input.birthDate)
+        : existing.birth_date;
+      const isActive =
+        typeof input.isActive === "boolean"
+          ? input.isActive
+            ? 1
+            : 0
+          : existing.is_active;
+
+      connection
+        .prepare(
+          `UPDATE animals
+           SET tutor_id = ?, name = ?, species = ?, breed = ?, sex = ?,
+               birth_date = ?, notes = ?, is_active = ?, updated_at = ?
+           WHERE id = ?`,
+        )
+        .run(
+          tutorId,
+          normalizedName,
+          normalizedSpecies,
+          has("breed") ? optionalText(input.breed) : existing.breed,
+          normalizedSex,
+          normalizedBirthDate,
+          has("notes") ? optionalText(input.notes) : existing.notes,
+          isActive,
+          nowIso(),
+          id,
+        );
+
+      return database.getAnimalById(id);
+    },
+
+    /**
+     * @param {string} id
+     */
+    deleteAnimal(id) {
+      const existing = connection
+        .prepare("SELECT id FROM animals WHERE id = ?")
+        .get(id);
+
+      if (!existing) {
+        throw domainError("ANIMAL_NOT_FOUND", "Animal não encontrado.");
+      }
+
+      connection.prepare("DELETE FROM animals WHERE id = ?").run(id);
+      return true;
     },
 
     /**
