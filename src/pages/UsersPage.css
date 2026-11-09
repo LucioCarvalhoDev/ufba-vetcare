@@ -895,3 +895,58 @@
     grid-column: 1 / -1;
   }
 }
+
+.user-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.user-delete-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff;
+  color: #b91c1c;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.user-delete-button:hover {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.user-delete-button:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.user-delete-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+@media (max-width: 640px) {
+  .user-row-actions {
+    gap: 5px;
+  }
+
+  .user-delete-button {
+    padding: 7px;
+  }
+
+  .user-delete-button span {
+    display: none;
+  }
+}

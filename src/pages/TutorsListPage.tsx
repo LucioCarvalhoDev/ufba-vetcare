@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { PencilIcon, SearchIcon } from "../components/icons";
-import { fetchTutors } from "../lib/api";
+import { PencilIcon, SearchIcon, TrashIcon } from "../components/icons";
+import { deleteTutor, fetchTutors } from "../lib/api";
 import { formatDate, getInitials } from "../lib/format";
 import { Link } from "../lib/navigation";
 import { useFlashMessage } from "../lib/useFlashMessage";
@@ -23,6 +23,8 @@ export default function TutorsListPage({ user }: TutorsListPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [flash, setFlash] = useFlashMessage();
 
   const hasFilters =
@@ -80,6 +82,33 @@ export default function TutorsListPage({ user }: TutorsListPageProps) {
     setStatus("");
   }
 
+  async function handleDelete(tutor: Tutor) {
+    if (
+      !window.confirm(
+        `Excluir o tutor ${tutor.name}? Esta ação não pode ser desfeita.`,
+      )
+    ) {
+      return;
+    }
+
+    setDeletingId(tutor.id);
+    setActionError(null);
+
+    try {
+      await deleteTutor(tutor.id);
+      setFlash("Tutor excluído com sucesso.");
+      setReloadToken((current) => current + 1);
+    } catch (deleteError) {
+      setActionError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Não foi possível excluir o tutor.",
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   if (!canRead) {
     return (
       <div className="users-page">
@@ -100,6 +129,21 @@ export default function TutorsListPage({ user }: TutorsListPageProps) {
           </p>
         </div>
       </header>
+
+      {actionError ? (
+        <div className="users-error" role="alert">
+          {actionError}
+          <div>
+            <button
+              className="users-error__retry"
+              type="button"
+              onClick={() => setActionError(null)}
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {flash ? (
         <div className="users-flash" role="status">
@@ -247,14 +291,30 @@ export default function TutorsListPage({ user }: TutorsListPageProps) {
                     <td>{formatDate(tutor.createdAt)}</td>
                     {canWrite ? (
                       <td className="users-table__actions">
-                        <Link
-                          className="user-edit-button"
-                          to={`/tutores/${tutor.id}/editar`}
-                          aria-label={`Editar ${tutor.name}`}
-                        >
-                          <PencilIcon />
-                          <span>Editar</span>
-                        </Link>
+                        <div className="user-row-actions">
+                          <Link
+                            className="user-edit-button"
+                            to={`/tutores/${tutor.id}/editar`}
+                            aria-label={`Editar ${tutor.name}`}
+                          >
+                            <PencilIcon />
+                            <span>Editar</span>
+                          </Link>
+                          <button
+                            className="user-delete-button"
+                            type="button"
+                            disabled={deletingId === tutor.id}
+                            aria-label={`Excluir ${tutor.name}`}
+                            onClick={() => handleDelete(tutor)}
+                          >
+                            <TrashIcon />
+                            <span>
+                              {deletingId === tutor.id
+                                ? "Excluindo..."
+                                : "Excluir"}
+                            </span>
+                          </button>
+                        </div>
                       </td>
                     ) : null}
                   </tr>

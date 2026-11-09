@@ -409,3 +409,15 @@ export async function fetchVeterinarianDashboard(
     { method: "GET" },
   );
 }
+
+export async function deleteTutor(id: string): Promise<void> {
+  await request<void>(`/tutors/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function deleteAnimal(id: string): Promise<void> {
+  await request<void>(`/animals/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}

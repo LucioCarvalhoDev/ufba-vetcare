@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { PencilIcon, SearchIcon } from "../components/icons";
-import { fetchAnimals, fetchTutors } from "../lib/api";
+import { PencilIcon, SearchIcon, TrashIcon } from "../components/icons";
+import { deleteAnimal, fetchAnimals, fetchTutors } from "../lib/api";
 import { formatDate, formatDateOnly, getInitials } from "../lib/format";
 import { Link } from "../lib/navigation";
 import { useFlashMessage } from "../lib/useFlashMessage";
@@ -32,6 +32,8 @@ export default function PetsListPage({ user }: PetsListPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [flash, setFlash] = useFlashMessage();
 
   const hasFilters =
@@ -120,6 +122,33 @@ export default function PetsListPage({ user }: PetsListPageProps) {
     setStatus("");
   }
 
+  async function handleDelete(animal: Animal) {
+    if (
+      !window.confirm(
+        `Excluir o pet ${animal.name}? Esta ação não pode ser desfeita.`,
+      )
+    ) {
+      return;
+    }
+
+    setDeletingId(animal.id);
+    setActionError(null);
+
+    try {
+      await deleteAnimal(animal.id);
+      setFlash("Pet excluído com sucesso.");
+      setReloadToken((current) => current + 1);
+    } catch (deleteError) {
+      setActionError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Não foi possível excluir o pet.",
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   if (!canRead) {
     return (
       <div className="users-page">
@@ -140,6 +169,21 @@ export default function PetsListPage({ user }: PetsListPageProps) {
           </p>
         </div>
       </header>
+
+      {actionError ? (
+        <div className="users-error" role="alert">
+          {actionError}
+          <div>
+            <button
+              className="users-error__retry"
+              type="button"
+              onClick={() => setActionError(null)}
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {flash ? (
         <div className="users-flash" role="status">
@@ -310,14 +354,30 @@ export default function PetsListPage({ user }: PetsListPageProps) {
                     <td>{formatDate(animal.createdAt)}</td>
                     {canWrite ? (
                       <td className="users-table__actions">
-                        <Link
-                          className="user-edit-button"
-                          to={`/pets/${animal.id}/editar`}
-                          aria-label={`Editar ${animal.name}`}
-                        >
-                          <PencilIcon />
-                          <span>Editar</span>
-                        </Link>
+                        <div className="user-row-actions">
+                          <Link
+                            className="user-edit-button"
+                            to={`/pets/${animal.id}/editar`}
+                            aria-label={`Editar ${animal.name}`}
+                          >
+                            <PencilIcon />
+                            <span>Editar</span>
+                          </Link>
+                          <button
+                            className="user-delete-button"
+                            type="button"
+                            disabled={deletingId === animal.id}
+                            aria-label={`Excluir ${animal.name}`}
+                            onClick={() => handleDelete(animal)}
+                          >
+                            <TrashIcon />
+                            <span>
+                              {deletingId === animal.id
+                                ? "Excluindo..."
+                                : "Excluir"}
+                            </span>
+                          </button>
+                        </div>
                       </td>
                     ) : null}
                   </tr>
