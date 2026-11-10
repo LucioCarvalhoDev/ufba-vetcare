@@ -44,3 +44,25 @@ export type DashboardQuery = {
   date?: string;
   month?: string;
 };
+
+export type ClinicDashboard = {
+  month: string;
+  metrics: {
+    activePatients: number;
+    consultationsThisMonth: number;
+    activeTutors: number;
+    pendingVaccinations: number;
+  };
+  monthlyConsultations: {
+    month: string;
+    count: number;
+  }[];
+  speciesDistribution: {
+    species: string;
+    count: number;
+  }[];
+};
+
+export type ClinicDashboardQuery = {
+  month?: string;
+};

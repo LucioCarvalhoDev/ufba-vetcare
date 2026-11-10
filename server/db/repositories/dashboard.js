@@ -78,6 +78,33 @@ function startOfWeek(date) {
 }
 
 export function createDashboardRepository(connection) {
+  const selectClinicTotals = connection.prepare(
+    `SELECT
+       (SELECT COUNT(*) FROM animals WHERE is_active = 1) AS active_patients,
+       (SELECT COUNT(*) FROM tutors WHERE is_active = 1) AS active_tutors`,
+  );
+  const selectClinicConsultations = connection.prepare(
+    `SELECT scheduled_at
+     FROM appointments
+     WHERE type = 'consultation'
+       AND status != 'cancelled'
+       AND scheduled_at >= ?
+       AND scheduled_at < ?`,
+  );
+  const selectClinicPendingVaccinations = connection.prepare(
+    `SELECT COUNT(*) AS total
+     FROM appointments
+     WHERE type = 'vaccination'
+       AND status = 'scheduled'
+       AND scheduled_at >= ?`,
+  );
+  const selectClinicSpecies = connection.prepare(
+    `SELECT species, COUNT(*) AS total
+     FROM animals
+     WHERE is_active = 1
+     GROUP BY species COLLATE NOCASE
+     ORDER BY total DESC, species COLLATE NOCASE ASC`,
+  );
   const selectVeterinarian = connection.prepare(
     `SELECT u.id, u.name, u.email
      FROM users u
@@ -120,6 +147,77 @@ export function createDashboardRepository(connection) {
   );
 
   return {
+    getClinicDashboard({ month = "", now = new Date() } = {}) {
+      const currentMonth = month
+        ? parseMonthKey(month)
+        : new Date(now.getFullYear(), now.getMonth(), 1);
+
+      if (!currentMonth) {
+        throw domainError(
+          "INVALID_DASHBOARD_QUERY",
+          "Mês do dashboard inválido.",
+        );
+      }
+
+      const rangeStart = new Date(
+        currentMonth.getFullYear(),
+        currentMonth.getMonth() - 9,
+        1,
+      );
+      const rangeEnd = new Date(
+        currentMonth.getFullYear(),
+        currentMonth.getMonth() + 1,
+        1,
+      );
+      const consultationCounts = new Map();
+
+      for (const row of selectClinicConsultations.all(
+        rangeStart.toISOString(),
+        rangeEnd.toISOString(),
+      )) {
+        const key = formatDateKey(new Date(row.scheduled_at)).slice(0, 7);
+        consultationCounts.set(
+          key,
+          (consultationCounts.get(key) ?? 0) + 1,
+        );
+      }
+
+      const monthlyConsultations = Array.from({ length: 10 }, (_, index) => {
+        const date = new Date(
+          rangeStart.getFullYear(),
+          rangeStart.getMonth() + index,
+          1,
+        );
+        const key = `${date.getFullYear()}-${pad(date.getMonth() + 1)}`;
+
+        return {
+          month: key,
+          count: consultationCounts.get(key) ?? 0,
+        };
+      });
+      const totals = selectClinicTotals.get();
+
+      return {
+        month: `${currentMonth.getFullYear()}-${pad(currentMonth.getMonth() + 1)}`,
+        metrics: {
+          activePatients: Number(totals.active_patients),
+          consultationsThisMonth:
+            consultationCounts.get(
+              `${currentMonth.getFullYear()}-${pad(currentMonth.getMonth() + 1)}`,
+            ) ?? 0,
+          activeTutors: Number(totals.active_tutors),
+          pendingVaccinations: Number(
+            selectClinicPendingVaccinations.get(now.toISOString()).total,
+          ),
+        },
+        monthlyConsultations,
+        speciesDistribution: selectClinicSpecies.all().map((row) => ({
+          species: row.species,
+          count: Number(row.total),
+        })),
+      };
+    },
+
     getVeterinarianDashboard(
       userId,
       { date = "", month = "" } = {},

@@ -17,7 +17,12 @@ import type {
   Tutor,
   TutorInput,
 } from "../types/registry";
-import type { DashboardQuery, VeterinarianDashboard } from "../types/dashboard";
+import type {
+  ClinicDashboard,
+  ClinicDashboardQuery,
+  DashboardQuery,
+  VeterinarianDashboard,
+} from "../types/dashboard";
 import type {
   Appointment,
   AppointmentFilters,
@@ -406,6 +411,19 @@ export async function fetchVeterinarianDashboard(
 
   return request<VeterinarianDashboard>(
     `/veterinarian-dashboard${search ? `?${search}` : ""}`,
+    { method: "GET" },
+  );
+}
+
+export async function fetchClinicDashboard(
+  query: ClinicDashboardQuery = {},
+): Promise<ClinicDashboard> {
+  const params = new URLSearchParams();
+  if (query.month) params.set("month", query.month);
+  const search = params.toString();
+
+  return request<ClinicDashboard>(
+    `/clinic-dashboard${search ? `?${search}` : ""}`,
     { method: "GET" },
   );
 }

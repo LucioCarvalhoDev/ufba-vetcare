@@ -902,7 +902,10 @@ export function createVetCareServer({
         return handleRecords(req, res, pathname);
       }
 
-      if (pathname === "/api/veterinarian-dashboard") {
+      if (
+        pathname === "/api/veterinarian-dashboard" ||
+        pathname === "/api/clinic-dashboard"
+      ) {
         return handleDashboard(req, res, pathname);
       }
 
