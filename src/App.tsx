@@ -12,6 +12,7 @@ import LoginPage from "./pages/LoginPage";
 import UserFormPage from "./pages/UserFormPage";
 import UsersListPage from "./pages/UsersListPage";
 import VeterinarianDashboardPage from "./pages/VeterinarianDashboardPage";
+import ClinicDashboardPage from "./pages/ClinicDashboardPage";
 import { fetchCurrentUser, logout } from "./lib/api";
 import { navigate, usePathname } from "./lib/navigation";
 import type { AuthUser } from "./types/auth";
@@ -93,6 +94,20 @@ export default function App() {
         onLogout={handleLogout}
       >
         <VeterinarianDashboardPage user={user} />
+      </AppShell>
+    );
+  }
+
+  if (pathname === "/dashboard") {
+    return (
+      <AppShell
+        user={user}
+        title="Dashboard"
+        activeNav="dashboard"
+        isLoggingOut={isLoggingOut}
+        onLogout={handleLogout}
+      >
+        <ClinicDashboardPage />
       </AppShell>
     );
   }

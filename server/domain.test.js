@@ -192,6 +192,96 @@ test("cadastra animais vinculados, atualiza e respeita integridade", () => {
   );
 });
 
+test("dashboard da clínica resume indicadores, consultas e espécies", async () => {
+  const now = new Date();
+  const monthDate = new Date(now.getFullYear(), now.getMonth() + 2, 1);
+  const month = `${monthDate.getFullYear()}-${String(
+    monthDate.getMonth() + 1,
+  ).padStart(2, "0")}`;
+  const baseline = database.getClinicDashboard({ month, now });
+  const tutor = database.createTutor({ name: "Tutor do Dashboard" });
+  const inactiveTutor = database.createTutor({
+    name: "Tutor Inativo do Dashboard",
+    isActive: false,
+  });
+  const animal = database.createAnimal({
+    tutorId: tutor.id,
+    name: "Animal do Dashboard",
+    species: "Cão",
+  });
+  database.createAnimal({
+    tutorId: inactiveTutor.id,
+    name: "Animal Inativo do Dashboard",
+    species: "Gato",
+    isActive: false,
+  });
+  const veterinarian = await database.createUser({
+    name: "Veterinário do Dashboard",
+    email: "dashboard.vet@vetcare.com",
+    password: "SenhaVet123!",
+    roleSlugs: ["veterinario"],
+  });
+  const createAppointment = (type, day) =>
+    database.createAppointment({
+      animalId: animal.id,
+      veterinarianId: veterinarian.id,
+      type,
+      scheduledAt: new Date(
+        monthDate.getFullYear(),
+        monthDate.getMonth(),
+        day,
+        9,
+      ).toISOString(),
+      durationMinutes: 30,
+    });
+
+  createAppointment("consultation", 2);
+  database.cancelAppointment(createAppointment("consultation", 3).id);
+  createAppointment("vaccination", 4);
+  database.cancelAppointment(createAppointment("vaccination", 5).id);
+  database.createAppointment({
+    animalId: animal.id,
+    veterinarianId: veterinarian.id,
+    type: "vaccination",
+    scheduledAt: new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
+    durationMinutes: 30,
+  });
+
+  const dashboard = database.getClinicDashboard({ month, now });
+
+  assert.equal(
+    dashboard.metrics.activePatients,
+    baseline.metrics.activePatients + 1,
+  );
+  assert.equal(
+    dashboard.metrics.activeTutors,
+    baseline.metrics.activeTutors + 1,
+  );
+  assert.equal(
+    dashboard.metrics.consultationsThisMonth,
+    baseline.metrics.consultationsThisMonth + 1,
+  );
+  assert.equal(
+    dashboard.metrics.pendingVaccinations,
+    baseline.metrics.pendingVaccinations + 1,
+  );
+  assert.equal(dashboard.monthlyConsultations.length, 10);
+  assert.equal(
+    dashboard.monthlyConsultations.find((item) => item.month === month).count,
+    baseline.monthlyConsultations.find((item) => item.month === month).count +
+      1,
+  );
+  assert.equal(
+    dashboard.speciesDistribution.find((item) => item.species === "Cão").count,
+    (baseline.speciesDistribution.find((item) => item.species === "Cão")
+      ?.count ?? 0) + 1,
+  );
+  assert.throws(
+    () => database.getClinicDashboard({ month: "2030-13", now }),
+    (error) => error.code === "INVALID_DASHBOARD_QUERY",
+  );
+});
+
 test("migrations são versionadas e idempotentes", async () => {
   const filename = join(tempDir, "migrations.db");
   const options = {

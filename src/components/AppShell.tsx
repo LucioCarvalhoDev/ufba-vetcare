@@ -10,6 +10,7 @@ type AppShellProps = {
   title: string;
   activeNav:
     | "inicio"
+    | "dashboard"
     | "agenda"
     | "minhaAgenda"
     | "tutores"
@@ -31,6 +32,13 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { key: "inicio", label: "Início", icon: "I", to: "/" },
+  {
+    key: "dashboard",
+    label: "Dashboard",
+    icon: "D",
+    to: "/dashboard",
+    permission: "dashboard.read",
+  },
   {
     key: "minhaAgenda",
     label: "Minha Agenda",

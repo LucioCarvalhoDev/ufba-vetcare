@@ -1328,3 +1328,105 @@ test("dashboard do veterinário resume o dia, o mês e a semana", async () => {
   );
   assert.equal(invalid.status, 400);
 });
+
+test("dashboard da clínica exige permissão e retorna indicadores agregados", async () => {
+  const receptionist = await database.createUser({
+    name: "Recepcionista do Dashboard da Clínica",
+    email: "recepcao.clinic.dashboard@vetcare.com",
+    password: "SenhaRecepcao123!",
+    roleSlugs: ["recepcionista"],
+  });
+  assert.ok(receptionist);
+
+  const monthDate = new Date();
+  monthDate.setDate(1);
+  monthDate.setMonth(monthDate.getMonth() + 2);
+  const month = `${monthDate.getFullYear()}-${String(
+    monthDate.getMonth() + 1,
+  ).padStart(2, "0")}`;
+  const baseline = database.getClinicDashboard({ month });
+  const tutor = database.createTutor({ name: "Tutor do Dashboard da Clínica" });
+  const animal = database.createAnimal({
+    tutorId: tutor.id,
+    name: "Pet do Dashboard da Clínica",
+    species: "Gato",
+  });
+  const vet = await database.createUser({
+    name: "Veterinário do Dashboard da Clínica",
+    email: "vet.clinic.dashboard@vetcare.com",
+    password: "SenhaVet123!",
+    roleSlugs: ["veterinario"],
+  });
+
+  database.createAppointment({
+    animalId: animal.id,
+    veterinarianId: vet.id,
+    type: "consultation",
+    scheduledAt: new Date(
+      monthDate.getFullYear(),
+      monthDate.getMonth(),
+      10,
+      9,
+    ).toISOString(),
+    durationMinutes: 30,
+  });
+  database.createAppointment({
+    animalId: animal.id,
+    veterinarianId: vet.id,
+    type: "vaccination",
+    scheduledAt: new Date(
+      monthDate.getFullYear(),
+      monthDate.getMonth(),
+      11,
+      9,
+    ).toISOString(),
+    durationMinutes: 30,
+  });
+
+  const login = await loginRequest(
+    receptionist.email,
+    "SenhaRecepcao123!",
+  );
+  const cookie = sessionCookie(login);
+  const response = await fetch(
+    `${baseUrl}/api/clinic-dashboard?month=${month}`,
+    { headers: { cookie } },
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.month, month);
+  assert.equal(
+    body.metrics.activePatients,
+    baseline.metrics.activePatients + 1,
+  );
+  assert.equal(
+    body.metrics.activeTutors,
+    baseline.metrics.activeTutors + 1,
+  );
+  assert.equal(
+    body.metrics.consultationsThisMonth,
+    baseline.metrics.consultationsThisMonth + 1,
+  );
+  assert.equal(
+    body.metrics.pendingVaccinations,
+    baseline.metrics.pendingVaccinations + 1,
+  );
+  assert.equal(body.monthlyConsultations.length, 10);
+  assert.equal(
+    body.speciesDistribution.find((item) => item.species === "Gato").count,
+    (baseline.speciesDistribution.find((item) => item.species === "Gato")
+      ?.count ?? 0) + 1,
+  );
+
+  const unauthenticated = await fetch(
+    `${baseUrl}/api/clinic-dashboard?month=${month}`,
+  );
+  assert.equal(unauthenticated.status, 401);
+
+  const invalid = await fetch(
+    `${baseUrl}/api/clinic-dashboard?month=2030-13`,
+    { headers: { cookie } },
+  );
+  assert.equal(invalid.status, 400);
+});
