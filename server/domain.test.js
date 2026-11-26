@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { after, before } from "node:test";
@@ -22,6 +23,54 @@ after(() => {
   database.close();
   rmSync(tempDir, { recursive: true, force: true });
 });
+
+function createNotificationUser() {
+  const id = randomUUID();
+  const timestamp = new Date().toISOString();
+
+  database.connection
+    .prepare(
+      `INSERT INTO users
+         (id, name, email, password_hash, is_active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 1, ?, ?)`,
+    )
+    .run(id, `Usuário ${id}`, `${id}@example.com`, "test-hash", timestamp, timestamp);
+
+  return id;
+}
+
+function insertNotification(connection, userId, overrides = {}) {
+  const notification = {
+    id: randomUUID(),
+    eventType: "appointment_created",
+    appointmentId: null,
+    title: "Novo agendamento",
+    description: "Agendamento de teste.",
+    createdAt: new Date().toISOString(),
+    readAt: null,
+    ...overrides,
+  };
+
+  connection
+    .prepare(
+      `INSERT INTO notifications
+         (id, user_id, event_type, appointment_id, title, description,
+          created_at, read_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      notification.id,
+      userId,
+      notification.eventType,
+      notification.appointmentId,
+      notification.title,
+      notification.description,
+      notification.createdAt,
+      notification.readAt,
+    );
+
+  return notification;
+}
 
 test("schema cria tutores, animais e vínculo com o tutor", () => {
   const tables = database.connection
@@ -48,6 +97,160 @@ test("schema cria tutores, animais e vínculo com o tutor", () => {
         foreignKey.on_delete === "RESTRICT",
     ),
   );
+});
+
+test("schema cria notificações associadas a usuário e agendamento", () => {
+  const columns = database.connection
+    .prepare("PRAGMA table_info(notifications)")
+    .all();
+
+  assert.deepEqual(
+    columns.map((column) => column.name),
+    [
+      "id",
+      "user_id",
+      "event_type",
+      "appointment_id",
+      "title",
+      "description",
+      "created_at",
+      "read_at",
+    ],
+  );
+  assert.equal(columns.find((column) => column.name === "user_id").notnull, 1);
+  assert.equal(columns.find((column) => column.name === "read_at").notnull, 0);
+
+  const foreignKeys = database.connection
+    .prepare("PRAGMA foreign_key_list(notifications)")
+    .all();
+
+  assert.ok(
+    foreignKeys.some(
+      (foreignKey) =>
+        foreignKey.table === "users" &&
+        foreignKey.from === "user_id" &&
+        foreignKey.on_delete === "CASCADE",
+    ),
+  );
+  assert.ok(
+    foreignKeys.some(
+      (foreignKey) =>
+        foreignKey.table === "appointments" &&
+        foreignKey.from === "appointment_id" &&
+        foreignKey.on_delete === "SET NULL",
+    ),
+  );
+
+  const indexes = database.connection
+    .prepare("PRAGMA index_list(notifications)")
+    .all()
+    .map((index) => index.name);
+
+  assert.ok(indexes.includes("idx_notifications_user_created_at"));
+  assert.ok(indexes.includes("idx_notifications_user_read_at"));
+});
+
+test("repositório lista e conta notificações somente do usuário solicitado", () => {
+  const firstUserId = createNotificationUser();
+  const secondUserId = createNotificationUser();
+  const older = insertNotification(database.connection, firstUserId, {
+    createdAt: "2026-01-01T10:00:00.000Z",
+  });
+  const newer = insertNotification(database.connection, firstUserId, {
+    createdAt: "2026-01-02T10:00:00.000Z",
+  });
+  const read = insertNotification(database.connection, firstUserId, {
+    createdAt: "2026-01-03T10:00:00.000Z",
+    readAt: "2026-01-03T11:00:00.000Z",
+  });
+  insertNotification(database.connection, secondUserId);
+
+  const notifications = database.listNotifications(firstUserId);
+
+  assert.deepEqual(
+    notifications.map((notification) => notification.id),
+    [read.id, newer.id, older.id],
+  );
+  assert.equal(notifications[0].userId, firstUserId);
+  assert.equal(notifications[0].readAt, read.readAt);
+  assert.equal(database.countUnreadNotifications(firstUserId), 2);
+  assert.equal(database.listNotifications(secondUserId).length, 1);
+  assert.equal(database.countUnreadNotifications(secondUserId), 1);
+});
+
+test("marcação individual respeita o usuário e é idempotente", () => {
+  const firstUserId = createNotificationUser();
+  const secondUserId = createNotificationUser();
+  const ownNotification = insertNotification(database.connection, firstUserId);
+  const otherNotification = insertNotification(database.connection, secondUserId);
+
+  assert.equal(
+    database.markNotificationAsRead(firstUserId, otherNotification.id),
+    null,
+  );
+  assert.equal(database.countUnreadNotifications(secondUserId), 1);
+
+  const marked = database.markNotificationAsRead(firstUserId, ownNotification.id);
+
+  assert.equal(marked.id, ownNotification.id);
+  assert.equal(marked.userId, firstUserId);
+  assert.ok(marked.readAt);
+  assert.equal(database.countUnreadNotifications(firstUserId), 0);
+  assert.equal(
+    database.markNotificationAsRead(firstUserId, ownNotification.id).readAt,
+    marked.readAt,
+  );
+});
+
+test("marcação em lote atualiza somente notificações não lidas do usuário", () => {
+  const firstUserId = createNotificationUser();
+  const secondUserId = createNotificationUser();
+  insertNotification(database.connection, firstUserId);
+  insertNotification(database.connection, firstUserId);
+  insertNotification(database.connection, firstUserId, {
+    readAt: "2026-01-03T11:00:00.000Z",
+  });
+  insertNotification(database.connection, secondUserId);
+
+  assert.equal(database.markAllNotificationsAsRead(firstUserId), 2);
+  assert.equal(database.countUnreadNotifications(firstUserId), 0);
+  assert.equal(database.countUnreadNotifications(secondUserId), 1);
+  assert.equal(database.markAllNotificationsAsRead(firstUserId), 0);
+});
+
+test("estado de leitura persiste após reabrir a conexão", async () => {
+  const filename = join(tempDir, "notifications-persistence.db");
+  const options = {
+    filename,
+    adminEmail: "notifications-admin@vetcare.com",
+    adminName: "Administrador de Notificações",
+    adminPassword: "SenhaAdmin123!",
+  };
+  let reopenedDatabase = await openDatabase(options);
+
+  try {
+    const user = reopenedDatabase.getUserAuthByEmail(options.adminEmail);
+    const notification = insertNotification(
+      reopenedDatabase.connection,
+      user.id,
+    );
+    const marked = reopenedDatabase.markNotificationAsRead(
+      user.id,
+      notification.id,
+    );
+
+    assert.ok(marked.readAt);
+    reopenedDatabase.close();
+    reopenedDatabase = await openDatabase(options);
+
+    const persisted = reopenedDatabase.listNotifications(user.id);
+    assert.equal(persisted.length, 1);
+    assert.equal(persisted[0].id, notification.id);
+    assert.equal(persisted[0].readAt, marked.readAt);
+    assert.equal(reopenedDatabase.countUnreadNotifications(user.id), 0);
+  } finally {
+    reopenedDatabase.close();
+  }
 });
 
 test("cadastra, consulta, filtra e atualiza tutores", () => {
@@ -295,7 +498,13 @@ test("migrations são versionadas e idempotentes", async () => {
     .prepare("PRAGMA user_version")
     .get().user_version;
 
-  assert.ok(firstVersion >= 2);
+  assert.ok(firstVersion >= 5);
+  const migrationSql = readFileSync(
+    new URL("./db/migrations/005_notifications.sql", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotThrow(() => first.connection.exec(migrationSql));
+  assert.doesNotThrow(() => first.connection.exec(migrationSql));
   first.close();
 
   const second = await openDatabase(options);

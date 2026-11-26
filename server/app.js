@@ -17,6 +17,7 @@ import { createAppointmentsRouter } from "./appointments.js";
 import { createAvailabilityRouter } from "./availability.js";
 import { createScheduleRouter } from "./schedule.js";
 import { createDashboardRouter } from "./dashboard.js";
+import { createNotificationsRouter } from "./notifications.js";
 
 const MAX_BODY_BYTES = 16 * 1024;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -831,6 +832,14 @@ export function createVetCareServer({
     HttpError,
   });
 
+  const handleNotifications = createNotificationsRouter({
+    database,
+    requirePermission,
+    isSameOriginRequest,
+    sendJson,
+    HttpError,
+  });
+
   const handleSchedule = createScheduleRouter({
     database,
     requirePermission,
@@ -911,6 +920,13 @@ export function createVetCareServer({
 
       if (pathname === "/api/schedule") {
         return handleSchedule(req, res, pathname);
+      }
+
+      if (
+        pathname === "/api/notifications" ||
+        pathname.startsWith("/api/notifications/")
+      ) {
+        return handleNotifications(req, res, pathname);
       }
 
       if (

@@ -76,6 +76,7 @@ export const ROLE_DEFINITIONS = [
       "vaccinations.read",
       "vaccinations.write",
       "dashboard.read",
+      "notifications.manage",
     ],
   },
 ];

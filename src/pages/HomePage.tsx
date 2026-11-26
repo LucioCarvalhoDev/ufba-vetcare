@@ -1,13 +1,16 @@
+import { useEffect, useRef, useState } from "react";
+import {
+  fetchNotifications,
+  markAllNotificationsAsRead,
+  markNotificationAsRead,
+} from "../lib/api";
 import { APP_VERSION } from "../lib/version";
+import type {
+  Notification,
+  NotificationEventType,
+} from "../types/notifications";
 
 type NotificationTone = "blue" | "green" | "amber" | "red";
-
-type NotificationItem = {
-  title: string;
-  description: string;
-  time: string;
-  tone: NotificationTone;
-};
 
 type NoticeItem = {
   title: string;
@@ -15,44 +18,11 @@ type NoticeItem = {
   tone: "amber" | "blue" | "green";
 };
 
-const NOTIFICATIONS: NotificationItem[] = [
-  {
-    title: "Vacina de Thor vence em 3 dias",
-    description: "Lembrete enviado ao tutor Mariana Souza.",
-    time: "há 5 min",
-    tone: "blue",
-  },
-  {
-    title: "Consulta confirmada: Mia",
-    description: "Carlos Lima confirmou a consulta das 08:45.",
-    time: "há 20 min",
-    tone: "green",
-  },
-  {
-    title: "Pagamento pendente",
-    description: "O atendimento de Luna aguarda registro de pagamento.",
-    time: "há 1 h",
-    tone: "amber",
-  },
-  {
-    title: "Prontuário atualizado",
-    description: "O prontuário de Bolinha foi atualizado pela Dra. Ana.",
-    time: "há 2 h",
-    tone: "blue",
-  },
-  {
-    title: "Consulta cancelada",
-    description: "Pedro Gomes cancelou a consulta das 15:00.",
-    time: "há 3 h",
-    tone: "red",
-  },
-  {
-    title: "Estoque baixo",
-    description: "Vacina antirrábica abaixo do nível mínimo.",
-    time: "ontem",
-    tone: "amber",
-  },
-];
+type NotificationLoadState = "loading" | "success" | "error";
+type PendingAction =
+  | { type: "notification"; id: string }
+  | { type: "all" }
+  | null;
 
 const UPDATES = [
   "Nova agenda com visão diária, semanal e mensal",
@@ -80,6 +50,46 @@ const NOTICES: NoticeItem[] = [
   },
 ];
 
+const NOTIFICATION_TONES: Record<NotificationEventType, NotificationTone> = {
+  appointment_created: "green",
+  appointment_updated: "blue",
+  appointment_cancelled: "red",
+};
+
+function getRelativeTime(createdAt: string): string {
+  const timestamp = Date.parse(createdAt);
+
+  if (!Number.isFinite(timestamp)) {
+    return "Data indisponível";
+  }
+
+  const elapsedMinutes = Math.max(
+    0,
+    Math.floor((Date.now() - timestamp) / 60_000),
+  );
+
+  if (elapsedMinutes === 0) {
+    return "agora";
+  }
+
+  if (elapsedMinutes < 60) {
+    return `há ${elapsedMinutes} min`;
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+
+  if (elapsedHours < 24) {
+    return `há ${elapsedHours} h`;
+  }
+
+  const elapsedDays = Math.floor(elapsedHours / 24);
+  return elapsedDays === 1 ? "ontem" : `há ${elapsedDays} dias`;
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 function CheckIcon() {
   return (
     <svg
@@ -101,40 +111,243 @@ function CheckIcon() {
 }
 
 export default function HomePage() {
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loadState, setLoadState] = useState<NotificationLoadState>("loading");
+  const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [reloadAttempt, setReloadAttempt] = useState(0);
+  const isActionPending = useRef(false);
+
+  useEffect(() => {
+    let isActive = true;
+    setLoadState("loading");
+    setLoadError("");
+
+    fetchNotifications()
+      .then((response) => {
+        if (!isActive) {
+          return;
+        }
+
+        setNotifications(response.notifications);
+        setUnreadCount(response.unreadCount);
+        setLoadState("success");
+      })
+      .catch((error: unknown) => {
+        if (!isActive) {
+          return;
+        }
+
+        setLoadError(
+          getErrorMessage(
+            error,
+            "Não foi possível carregar as notificações.",
+          ),
+        );
+        setLoadState("error");
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [reloadAttempt]);
+
+  async function handleMarkNotificationAsRead(notification: Notification) {
+    if (notification.isRead || isActionPending.current) {
+      return;
+    }
+
+    isActionPending.current = true;
+    setPendingAction({ type: "notification", id: notification.id });
+    setActionError("");
+
+    try {
+      const response = await markNotificationAsRead(notification.id);
+      setNotifications((current) =>
+        current.map((item) =>
+          item.id === notification.id ? response.notification : item,
+        ),
+      );
+
+      if (response.notification.isRead) {
+        setUnreadCount((current) => Math.max(0, current - 1));
+      }
+    } catch (error: unknown) {
+      setActionError(
+        getErrorMessage(
+          error,
+          "Não foi possível marcar a notificação como lida.",
+        ),
+      );
+    } finally {
+      isActionPending.current = false;
+      setPendingAction(null);
+    }
+  }
+
+  async function handleMarkAllAsRead() {
+    if (unreadCount === 0 || isActionPending.current) {
+      return;
+    }
+
+    isActionPending.current = true;
+    setPendingAction({ type: "all" });
+    setActionError("");
+
+    try {
+      const response = await markAllNotificationsAsRead();
+      setNotifications((current) =>
+        current.map((notification) =>
+          notification.isRead
+            ? notification
+            : { ...notification, isRead: true },
+        ),
+      );
+      setUnreadCount((current) =>
+        Math.max(0, current - response.updatedCount),
+      );
+
+      try {
+        const refreshed = await fetchNotifications();
+        setNotifications(refreshed.notifications);
+        setUnreadCount(refreshed.unreadCount);
+      } catch (error: unknown) {
+        setActionError(
+          getErrorMessage(
+            error,
+            "As notificações foram marcadas, mas não foi possível atualizar a lista.",
+          ),
+        );
+      }
+    } catch (error: unknown) {
+      setActionError(
+        getErrorMessage(error, "Não foi possível marcar todas como lidas."),
+      );
+    } finally {
+      isActionPending.current = false;
+      setPendingAction(null);
+    }
+  }
+
+  const unreadLabel =
+    loadState === "loading"
+      ? "..."
+      : loadState === "error"
+        ? "—"
+        : `${unreadCount} ${unreadCount === 1 ? "nova" : "novas"}`;
+
   return (
     <div className="home__grid">
       <section
         className="card notifications"
+        id="notifications"
         aria-labelledby="notifications-title"
+        aria-busy={loadState === "loading"}
       >
         <header className="card__header card__header--notifications">
           <div className="card__heading">
             <h2 id="notifications-title">Notificações</h2>
-            <span className="badge">6 novas</span>
+            <span className="badge">{unreadLabel}</span>
           </div>
-          <a className="card__action" href="#notificacoes">
-            Marcar todas como lidas
-          </a>
+          <button
+            className="card__action"
+            type="button"
+            onClick={handleMarkAllAsRead}
+            disabled={
+              loadState !== "success" ||
+              unreadCount === 0 ||
+              pendingAction !== null
+            }
+          >
+            {pendingAction?.type === "all"
+              ? "Marcando..."
+              : "Marcar todas como lidas"}
+          </button>
         </header>
 
+        {actionError ? (
+          <p className="notifications__feedback" role="alert">
+            {actionError}
+          </p>
+        ) : null}
+
         <ul className="notifications__list">
-          {NOTIFICATIONS.map((notification) => (
-            <li className="notification" key={notification.title}>
-              <span
-                className={`notification__dot notification__dot--${notification.tone}`}
-                aria-hidden="true"
-              />
-              <div className="notification__body">
-                <div className="notification__headline">
-                  <h3>{notification.title}</h3>
-                  <span className="notification__time">
-                    {notification.time}
-                  </span>
-                </div>
-                <p>{notification.description}</p>
-              </div>
+          {loadState === "loading" ? (
+            <li className="notifications__state" role="status">
+              Carregando notificações...
             </li>
-          ))}
+          ) : null}
+
+          {loadState === "error" ? (
+            <li className="notifications__state">
+              <p role="alert">{loadError}</p>
+              <button
+                className="notifications__retry"
+                type="button"
+                onClick={() => setReloadAttempt((current) => current + 1)}
+              >
+                Tentar novamente
+              </button>
+            </li>
+          ) : null}
+
+          {loadState === "success" && notifications.length === 0 ? (
+            <li className="notifications__state">
+              Não existem notificações no momento.
+            </li>
+          ) : null}
+
+          {loadState === "success"
+            ? notifications.map((notification) => {
+                const tone = NOTIFICATION_TONES[notification.eventType];
+                const isPending =
+                  pendingAction?.type === "notification" &&
+                  pendingAction.id === notification.id;
+
+                return (
+                  <li
+                    className={`notification${notification.isRead ? " notification--read" : " notification--unread"}`}
+                    key={notification.id}
+                  >
+                    <span
+                      className={`notification__dot notification__dot--${tone}${notification.isRead ? " notification__dot--read" : ""}`}
+                      aria-hidden="true"
+                    />
+                    <div className="notification__body">
+                      <div className="notification__headline">
+                        <h3>{notification.title}</h3>
+                        <span className="notification__time">
+                          {getRelativeTime(notification.createdAt)}
+                        </span>
+                      </div>
+                      <p>{notification.description}</p>
+                      <div className="notification__actions">
+                        <span
+                          className={`notification__read-status${notification.isRead ? " notification__read-status--read" : " notification__read-status--unread"}`}
+                        >
+                          {notification.isRead ? "Lida" : "Não lida"}
+                        </span>
+                        {!notification.isRead ? (
+                          <button
+                            className="notification__read-action"
+                            type="button"
+                            disabled={pendingAction !== null}
+                            aria-label={`Marcar notificação "${notification.title}" como lida`}
+                            onClick={() =>
+                              handleMarkNotificationAsRead(notification)
+                            }
+                          >
+                            {isPending ? "Salvando..." : "Marcar como lida"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })
+            : null}
         </ul>
       </section>
 

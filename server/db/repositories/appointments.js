@@ -53,6 +53,27 @@ function normalizeSchedule(scheduledAt, durationMinutes) {
   };
 }
 
+function notificationContent(eventType, appointment) {
+  const eventTitles = {
+    appointment_created: "Novo agendamento",
+    appointment_updated: "Agendamento alterado",
+    appointment_cancelled: "Agendamento cancelado",
+  };
+  const appointmentTypes = {
+    consultation: "consulta",
+    surgery: "operação",
+    vaccination: "vacinação",
+  };
+
+  return {
+    title: `${eventTitles[eventType]}: ${appointment.animal_name}`,
+    description:
+      `${appointmentTypes[appointment.type]} para ${appointment.animal_name} ` +
+      `com ${appointment.veterinarian_name}, tutor ${appointment.tutor_name}, ` +
+      `em ${appointment.scheduled_at}.`,
+  };
+}
+
 export function createAppointmentsRepository(connection) {
   const selectAppointmentById = connection.prepare(
     `SELECT ap.*,
@@ -86,6 +107,20 @@ export function createAppointmentsRepository(connection) {
        AND scheduled_at < ?
        AND ends_at > ?
      LIMIT 1`,
+  );
+  const selectNotificationRecipients = connection.prepare(
+    `SELECT DISTINCT u.id
+     FROM users u
+     INNER JOIN user_roles ur ON ur.user_id = u.id
+     INNER JOIN role_permissions rp ON rp.role_id = ur.role_id
+     INNER JOIN permissions p ON p.id = rp.permission_id
+     WHERE u.is_active = 1 AND p.code = ?`,
+  );
+  const insertNotification = connection.prepare(
+    `INSERT INTO notifications
+       (id, user_id, event_type, appointment_id, title, description,
+        created_at, read_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
   );
 
   function getAppointmentById(id) {
@@ -123,6 +158,24 @@ export function createAppointmentsRepository(connection) {
       throw domainError(
         "APPOINTMENT_CONFLICT",
         "Já existe um agendamento para este veterinário nesse horário.",
+      );
+    }
+  }
+
+  function notifyAppointment(eventType, appointment, createdAt) {
+    const content = notificationContent(eventType, appointment);
+
+    for (const recipient of selectNotificationRecipients.all(
+      "notifications.manage",
+    )) {
+      insertNotification.run(
+        randomUUID(),
+        recipient.id,
+        eventType,
+        appointment.id,
+        content.title,
+        content.description,
+        createdAt,
       );
     }
   }
@@ -240,6 +293,12 @@ export function createAppointmentsRepository(connection) {
             timestamp,
             timestamp,
           );
+
+        notifyAppointment(
+          "appointment_created",
+          selectAppointmentById.get(id),
+          timestamp,
+        );
       });
 
       return getAppointmentById(id);
@@ -257,7 +316,9 @@ export function createAppointmentsRepository(connection) {
         notes = null,
       },
     ) {
-      if (!selectAppointmentById.get(id)) {
+      const existing = selectAppointmentById.get(id);
+
+      if (!existing) {
         throw domainError("APPOINTMENT_NOT_FOUND", "Agendamento não encontrado.");
       }
 
@@ -271,8 +332,28 @@ export function createAppointmentsRepository(connection) {
 
       assertReferences(animalId, veterinarianId);
       const schedule = normalizeSchedule(scheduledAt, durationMinutes);
+      const normalizedNotes = optionalText(notes);
+      const timestamp = nowIso();
 
       withTransaction(connection, () => {
+        const current = selectAppointmentById.get(id);
+
+        if (!current) {
+          throw domainError(
+            "APPOINTMENT_NOT_FOUND",
+            "Agendamento não encontrado.",
+          );
+        }
+
+        const hasEffectiveChanges =
+          current.animal_id !== animalId ||
+          current.veterinarian_id !== veterinarianId ||
+          current.type !== type ||
+          current.scheduled_at !== schedule.scheduledAt ||
+          Number(current.duration_minutes) !== schedule.durationMinutes ||
+          current.status !== status ||
+          current.notes !== normalizedNotes;
+
         assertNoConflict({
           id,
           veterinarianId,
@@ -296,10 +377,22 @@ export function createAppointmentsRepository(connection) {
             schedule.endsAt,
             schedule.durationMinutes,
             status,
-            optionalText(notes),
-            nowIso(),
+            normalizedNotes,
+            timestamp,
             id,
           );
+
+        if (hasEffectiveChanges) {
+          const eventType =
+            status === "cancelled" && current.status !== "cancelled"
+              ? "appointment_cancelled"
+              : "appointment_updated";
+          notifyAppointment(
+            eventType,
+            selectAppointmentById.get(id),
+            timestamp,
+          );
+        }
       });
 
       return getAppointmentById(id);
@@ -312,11 +405,29 @@ export function createAppointmentsRepository(connection) {
         throw domainError("APPOINTMENT_NOT_FOUND", "Agendamento não encontrado.");
       }
 
-      connection
-        .prepare(
-          "UPDATE appointments SET status = 'cancelled', updated_at = ? WHERE id = ?",
-        )
-        .run(nowIso(), id);
+      const timestamp = nowIso();
+
+      withTransaction(connection, () => {
+        const current = selectAppointmentById.get(id);
+
+        if (!current) {
+          throw domainError("APPOINTMENT_NOT_FOUND", "Agendamento não encontrado.");
+        }
+
+        connection
+          .prepare(
+            "UPDATE appointments SET status = 'cancelled', updated_at = ? WHERE id = ?",
+          )
+          .run(timestamp, id);
+
+        if (current.status !== "cancelled") {
+          notifyAppointment(
+            "appointment_cancelled",
+            selectAppointmentById.get(id),
+            timestamp,
+          );
+        }
+      });
 
       return getAppointmentById(id);
     },

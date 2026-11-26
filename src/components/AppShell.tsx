@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { getFirstName, getInitials } from "../lib/format";
-import { Link, usePathname } from "../lib/navigation";
+import { Link, navigate, usePathname } from "../lib/navigation";
 import { APP_VERSION } from "../lib/version";
 import type { AuthUser } from "../types/auth";
 import "./AppShell.css";
@@ -182,6 +182,14 @@ export default function AppShell({
   }, [pathname]);
 
   useEffect(() => {
+    if (pathname === "/" && window.location.hash === "#notifications") {
+      document
+        .getElementById("notifications")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [pathname]);
+
+  useEffect(() => {
     if (!isUserMenuOpen) {
       return;
     }
@@ -265,6 +273,19 @@ export default function AppShell({
     if (restoreFocus) {
       triggerRef.current?.focus();
     }
+  }
+
+  function handleOpenNotificationCenter() {
+    closeUserMenu(true);
+
+    if (pathname === "/") {
+      document
+        .getElementById("notifications")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    navigate("/#notifications");
   }
 
   async function handleLogout() {
@@ -426,12 +447,12 @@ export default function AppShell({
                     className="user-menu__item"
                     type="button"
                     role="menuitem"
-                    onClick={() => closeUserMenu(true)}
+                    onClick={handleOpenNotificationCenter}
                   >
                     <span className="user-menu__icon" aria-hidden="true">
                       <BellIcon />
                     </span>
-                    <span>Central Notificações</span>
+                    <span>Central de Notificações</span>
                   </button>
                 </div>
 

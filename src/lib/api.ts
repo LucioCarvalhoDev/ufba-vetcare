@@ -33,6 +33,11 @@ import type {
   VeterinarianAvailabilityFilter,
   ScheduleWeek,
 } from "../types/appointments";
+import type {
+  NotificationListResponse,
+  NotificationReadAllResponse,
+  NotificationReadResponse,
+} from "../types/notifications";
 
 type ApiErrorPayload = {
   error?: {
@@ -349,6 +354,27 @@ export async function cancelAppointment(id: string): Promise<Appointment> {
   );
 
   return response.appointment;
+}
+
+export async function fetchNotifications(): Promise<NotificationListResponse> {
+  return request<NotificationListResponse>("/notifications", {
+    method: "GET",
+  });
+}
+
+export async function markNotificationAsRead(
+  id: string,
+): Promise<NotificationReadResponse> {
+  return request<NotificationReadResponse>(
+    `/notifications/${encodeURIComponent(id)}/read`,
+    { method: "PATCH" },
+  );
+}
+
+export async function markAllNotificationsAsRead(): Promise<NotificationReadAllResponse> {
+  return request<NotificationReadAllResponse>("/notifications/read-all", {
+    method: "POST",
+  });
 }
 
 export async function fetchVeterinarians(
